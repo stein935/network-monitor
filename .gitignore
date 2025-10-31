@@ -49,6 +49,7 @@ ehthumbs.db
 Thumbs.db
 
 # Logs (keep structure but ignore content in some cases)
+logs/*
 *.log
 
 # Temporary files
