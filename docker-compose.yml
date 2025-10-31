@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  network-monitor:
+    build: .
+    container_name: network-monitor
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./logs:/app/logs
+    network_mode: bridge
+    privileged: true # Required for ping
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
