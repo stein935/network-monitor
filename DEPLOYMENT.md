@@ -143,20 +143,20 @@ logs/
 
 ```bash
 cd ~
-git clone https://github.com/kstein204_comcast/scripts.git
-cd scripts/network-monitor
+git clone https://github.com/stein935/network-monitor.git
+cd network-monitor
 ```
 
 ### 2. Build Docker Image
 
 ```bash
-docker-compose build
+docker compose build
 ```
 
 ### 3. Start Container
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 4. Verify Container is Running
@@ -241,9 +241,9 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/home/pi/scripts/network-monitor
-ExecStart=/usr/bin/docker-compose up -d
-ExecStop=/usr/bin/docker-compose down
+WorkingDirectory=/home/pi/network-monitor
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
 
 [Install]
 WantedBy=multi-user.target
@@ -362,8 +362,8 @@ ports:
 Then recreate the container:
 
 ```bash
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ## Maintenance
@@ -371,11 +371,11 @@ docker-compose up -d
 ### Update Project
 
 ```bash
-cd ~/scripts/network-monitor
-git pull origin dev
-docker-compose down
-docker-compose build
-docker-compose up -d
+cd ~/network-monitor
+git pull origin main
+docker compose down
+docker compose build
+docker compose up -d
 sudo systemctl restart network-monitor-daemon.service
 sudo systemctl restart network-monitor-server.service
 ```
@@ -423,9 +423,9 @@ docker logs network-monitor
 sudo netstat -tlnp | grep :80
 
 # Try rebuilding
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### Monitor Not Running
