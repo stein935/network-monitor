@@ -258,14 +258,19 @@ fi
 
 ### Docker on ARM (Raspberry Pi)
 
-Dockerfile uses system packages approach to avoid compilation issues:
+Dockerfile uses system packages for pandas/plotly to avoid lengthy compilation (20-45 minutes) on ARM:
 ```dockerfile
 RUN apt-get update && apt-get install -y \
     bc \
     iputils-ping \
     curl \
+    python3-pandas \
+    python3-plotly \
+    python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 ```
+
+This approach builds in ~2-3 minutes instead of 20-45 minutes required for pip compilation.
 
 ### Memory constraints on Pi Zero 2 W
 

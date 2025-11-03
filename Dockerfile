@@ -1,16 +1,14 @@
 FROM python:3.11-slim-bookworm
 
-# Install system dependencies including build tools for ARM
+# Install system dependencies including pre-built Python packages
+# Using system packages avoids lengthy compilation on ARM devices
 RUN apt-get update && apt-get install -y \
   bc \
   iputils-ping \
   curl \
-  gcc \
-  g++ \
-  gfortran \
-  libopenblas-dev \
-  liblapack-dev \
-  python3-dev \
+  python3-pandas \
+  python3-plotly \
+  python3-numpy \
   && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -18,9 +16,6 @@ WORKDIR /app
 
 # Copy application files
 COPY . .
-
-# Install Python packages using pip
-RUN pip install --no-cache-dir pandas==2.0.3 plotly==5.17.0
 
 # Create logs directory
 RUN mkdir -p logs
