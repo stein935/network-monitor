@@ -12,6 +12,8 @@ import subprocess
 import webbrowser
 import threading
 import time
+from datetime import datetime
+import urllib.parse
 
 
 class VisualizationHandler(BaseHTTPRequestHandler):
@@ -35,6 +37,30 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error generating index: {str(e)}")
 
+        elif self.path.startswith("/csv/"):
+            # Serve CSV files for dynamic visualization
+            try:
+                # Path format: /csv/YYYY-MM-DD/monitor_YYYYMMDD_HH.csv
+                csv_path = urllib.parse.unquote(self.path[5:])  # Remove /csv/ prefix
+                csv_file = self.logs_dir / csv_path
+
+                if not csv_file.exists() or not csv_file.is_file():
+                    self.send_error(404, f"CSV file not found: {csv_path}")
+                    return
+
+                with open(csv_file, 'rb') as f:
+                    content = f.read()
+
+                self.send_response(200)
+                self.send_header("Content-type", "text/csv")
+                self.send_header("Content-Length", len(content))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Access-Control-Allow-Origin", "*")  # Allow CORS
+                self.end_headers()
+                self.wfile.write(content)
+            except Exception as e:
+                self.send_error(500, f"Error serving CSV: {str(e)}")
+
         elif self.path.startswith("/view/"):
             # Serve specific visualization
             # Path format: /view/YYYY-MM-DD/monitor_YYYYMMDD_HHMMSS.csv
@@ -54,42 +80,58 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     self.send_error(404, f"CSV file not found: {csv_file}")
                     return
 
-                # Regenerate visualization
-                print(f"\n[*] Regenerating visualization for: {csv_file.name}")
+                # Check if this is the current hour's file
+                now = datetime.now()
+                current_date_str = now.strftime("%Y-%m-%d")
+                current_hour_str = now.strftime("%Y%m%d_%H")
+                is_current_hour = (date_str == current_date_str and current_hour_str in csv_filename)
 
-                # Run visualize.py to generate fresh HTML
-                script_dir = Path(__file__).parent
-                visualize_script = script_dir / "visualize.py"
+                print(f"\n[*] Serving visualization for: {csv_file.name} (current_hour={is_current_hour})")
 
-                # Check if running in Docker (use system python3) or native (use venv)
-                if Path("/.dockerenv").exists():
-                    python_executable = "python3"
-                else:
-                    venv_python = script_dir / "venv" / "bin" / "python"
-                    python_executable = str(venv_python)
-
-                result = subprocess.run(
-                    [python_executable, str(visualize_script), str(csv_file)],
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode != 0:
-                    self.send_error(
-                        500, f"Failed to generate visualization: {result.stderr}"
-                    )
-                    return
-
-                # Read the generated HTML file
                 html_dir = self.logs_dir / date_str / "html"
                 html_file = html_dir / f"{csv_file.stem}_visualization.html"
 
-                if not html_file.exists():
-                    self.send_error(404, "Visualization file not found")
-                    return
+                # For current hour: use dynamic visualization
+                # For past hours: generate once and cache
+                if is_current_hour:
+                    # Serve dynamic HTML that updates from CSV
+                    print("[*] Using dynamic visualization (current hour)")
+                    html_content = self._generate_dynamic_html(csv_file, date_str, csv_filename)
+                else:
+                    # For past hours, check if HTML exists, if not generate it once
+                    if not html_file.exists():
+                        print("[*] Generating static visualization (past hour, first time)")
+                        script_dir = Path(__file__).parent
+                        visualize_script = script_dir / "visualize.py"
 
-                with open(html_file, "r", encoding="utf-8") as f:
-                    html_content = f.read()
+                        # Check if running in Docker (use system python3) or native (use venv)
+                        if Path("/.dockerenv").exists():
+                            python_executable = "python3"
+                        else:
+                            venv_python = script_dir / "venv" / "bin" / "python"
+                            python_executable = str(venv_python)
+
+                        result = subprocess.run(
+                            [python_executable, str(visualize_script), str(csv_file)],
+                            capture_output=True,
+                            text=True,
+                        )
+
+                        if result.returncode != 0:
+                            self.send_error(
+                                500, f"Failed to generate visualization: {result.stderr}"
+                            )
+                            return
+                    else:
+                        print("[*] Using cached static visualization (past hour)")
+
+                    # Read the cached HTML file
+                    if not html_file.exists():
+                        self.send_error(404, "Visualization file not found")
+                        return
+
+                    with open(html_file, "r", encoding="utf-8") as f:
+                        html_content = f.read()
 
                 # Find all CSV files for navigation
                 all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
@@ -389,6 +431,265 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 html += "</div>\n"
 
         html += """</body>
+</html>"""
+
+        return html
+
+    def _generate_dynamic_html(self, csv_file, date_str, csv_filename):
+        """Generate dynamic HTML that fetches CSV and updates chart via JavaScript."""
+        csv_url = f"/csv/{date_str}/csv/{csv_filename}"
+
+        # Find all CSV files for navigation
+        all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
+        current_index = None
+        for i, f in enumerate(all_csv_files):
+            if f == csv_file:
+                current_index = i
+                break
+
+        # Determine previous and next files
+        prev_url = None
+        next_url = None
+        if current_index is not None:
+            if current_index > 0:
+                prev_file = all_csv_files[current_index - 1]
+                prev_date = prev_file.parent.parent.name
+                prev_url = f"/view/{prev_date}/{prev_file.name}"
+            if current_index < len(all_csv_files) - 1:
+                next_file = all_csv_files[current_index + 1]
+                next_date = next_file.parent.parent.name
+                next_url = f"/view/{next_date}/{next_file.name}"
+
+        prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
+        next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
+
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Network Monitor - {csv_filename} (Live)</title>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <style>
+        html, body {{
+            background-color: #1d2021 !important;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            color: #ebdbb2;
+            font-family: monospace;
+        }}
+        #chart {{
+            width: 100%;
+            height: 600px;
+        }}
+        .nav-buttons {{
+            position: fixed;
+            top: 630px;
+            left: 40px;
+            z-index: 1000;
+        }}
+        .nav-buttons-right {{
+            position: fixed;
+            top: 630px;
+            right: 40px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }}
+        .nav-btn {{
+            background: #3c3836;
+            color: #ebdbb2;
+            border: 2px solid #665c54;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }}
+        .nav-btn:hover:not(:disabled) {{
+            background: #504945;
+            border-color: #fe8019;
+            color: #fe8019;
+        }}
+        .nav-btn:disabled {{
+            opacity: 0.3;
+            cursor: not-allowed;
+        }}
+        .live-indicator {{
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #b8bb26;
+            color: #1d2021;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: bold;
+            z-index: 1000;
+        }}
+    </style>
+</head>
+<body>
+    <div class="live-indicator">🔴 LIVE</div>
+    <div id="chart"></div>
+
+    <div class="nav-buttons">
+        <button class="nav-btn" onclick="window.location.href='/'" title="Back to index">← Home</button>
+    </div>
+    <div class="nav-buttons-right">
+        <button class="nav-btn" {prev_btn_attr} title="Previous file">← Prev</button>
+        <button class="nav-btn" {next_btn_attr} title="Next file">Next →</button>
+    </div>
+
+    <script>
+        const csvUrl = '{csv_url}';
+        let updateInterval;
+
+        function parseCSV(csv) {{
+            const lines = csv.trim().split('\\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {{
+                const values = lines[i].split(',');
+                const row = {{}};
+                headers.forEach((header, index) => {{
+                    row[header] = values[index] ? values[index].trim() : null;
+                }});
+                data.push(row);
+            }}
+
+            return data;
+        }}
+
+        function updateChart() {{
+            fetch(csvUrl)
+                .then(response => response.text())
+                .then(csvText => {{
+                    const data = parseCSV(csvText);
+
+                    // Parse timestamps and values
+                    const timestamps = data.map(row => row.timestamp);
+                    const responseTimes = data.map(row => row.response_time === 'null' ? null : parseFloat(row.response_time));
+                    const successRates = data.map(row => {{
+                        const success = parseInt(row.success_count || 0);
+                        const total = parseInt(row.total_count || 1);
+                        return (success / total) * 100;
+                    }});
+
+                    // Color-code markers based on success rate
+                    const colors = successRates.map(rate => {{
+                        if (rate === 100) return '#b8bb26'; // green
+                        if (rate === 0) return '#fb4934';   // red
+                        return '#fe8019';                    // orange
+                    }});
+
+                    const trace1 = {{
+                        x: timestamps,
+                        y: responseTimes,
+                        mode: 'lines+markers',
+                        name: 'Response Time (ms)',
+                        line: {{ color: '#83a598', width: 2 }},
+                        marker: {{ size: 4 }},
+                        yaxis: 'y'
+                    }};
+
+                    const trace2 = {{
+                        x: timestamps,
+                        y: successRates,
+                        mode: 'lines+markers',
+                        name: 'Success Rate (%)',
+                        line: {{ color: '#8ec07c', width: 2 }},
+                        marker: {{ size: 6, color: colors }},
+                        fill: 'tozeroy',
+                        fillcolor: 'rgba(142, 192, 124, 0.2)',
+                        yaxis: 'y2'
+                    }};
+
+                    const layout = {{
+                        title: {{
+                            text: 'Network Monitoring Dashboard (Live)<br><sub>{csv_filename}</sub>',
+                            x: 0.5,
+                            xanchor: 'center',
+                            font: {{ color: '#fe8019', size: 20 }}
+                        }},
+                        xaxis: {{
+                            title: 'Time',
+                            gridcolor: '#504945',
+                            color: '#ebdbb2'
+                        }},
+                        yaxis: {{
+                            title: 'Response Time (ms)',
+                            side: 'left',
+                            showgrid: true,
+                            gridcolor: '#504945',
+                            color: '#ebdbb2'
+                        }},
+                        yaxis2: {{
+                            title: 'Success Rate (%)',
+                            overlaying: 'y',
+                            side: 'right',
+                            range: [0, 105],
+                            showgrid: false,
+                            color: '#ebdbb2'
+                        }},
+                        height: 600,
+                        hovermode: 'x unified',
+                        paper_bgcolor: '#1d2021',
+                        plot_bgcolor: '#282828',
+                        font: {{ color: '#ebdbb2', family: 'monospace' }},
+                        legend: {{
+                            orientation: 'h',
+                            yanchor: 'bottom',
+                            y: -0.3,
+                            xanchor: 'center',
+                            x: 0.5,
+                            bgcolor: '#3c3836',
+                            bordercolor: '#665c54',
+                            borderwidth: 1,
+                            font: {{ color: '#ebdbb2' }}
+                        }},
+                        margin: {{ b: 120 }}
+                    }};
+
+                    Plotly.newPlot('chart', [trace1, trace2], layout);
+                }})
+                .catch(error => {{
+                    console.error('Error updating chart:', error);
+                }});
+        }}
+
+        // Initial load
+        updateChart();
+
+        // Auto-update every 60 seconds when page is visible
+        function startAutoUpdate() {{
+            updateInterval = setInterval(() => {{
+                if (!document.hidden) {{
+                    console.log('Auto-updating chart data...');
+                    updateChart();
+                }}
+            }}, 60000); // 60 seconds
+        }}
+
+        function stopAutoUpdate() {{
+            if (updateInterval) {{
+                clearInterval(updateInterval);
+            }}
+        }}
+
+        startAutoUpdate();
+
+        // Pause/resume based on page visibility
+        document.addEventListener('visibilitychange', () => {{
+            if (document.hidden) {{
+                stopAutoUpdate();
+            }} else {{
+                startAutoUpdate();
+            }}
+        }});
+    </script>
+</body>
 </html>"""
 
         return html
