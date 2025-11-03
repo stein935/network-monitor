@@ -163,11 +163,18 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 date_str = parts[0]
                 csv_filename = "/".join(parts[1:])
 
-                csv_file = self.logs_dir / date_str / "csv" / csv_filename
+                # Extract hour from filename (format: monitor_YYYYMMDD_HH.csv)
+                hour_str = csv_filename.split('_')[-1].replace('.csv', '')
+                hour = int(hour_str)
 
-                if not csv_file.exists():
-                    self.send_error(404, f"CSV file not found: {csv_file}")
+                # Check if data exists in database
+                logs = self.db.get_logs_by_hour(date_str, hour)
+                if not logs:
+                    self.send_error(404, f"No data found for {date_str} hour {hour}")
                     return
+
+                # For compatibility, create a pseudo csv_file path
+                csv_file = self.logs_dir / date_str / "csv" / csv_filename
 
                 # Check if this is the current hour's file
                 now = datetime.now()
