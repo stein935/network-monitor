@@ -550,20 +550,21 @@ sudo ufw allow 8080/tcp
 sudo ufw status
 ```
 
-### 4. Limit Docker Resources
+### 4. Docker Resource Limits (Already Configured)
 
-Edit `docker-compose.yml`:
+The `docker-compose.yml` includes resource limits for the Pi Zero 2 W:
 
 ```yaml
-services:
-  network-monitor:
-    # ... existing config ...
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
+deploy:
+  resources:
+    limits:
+      cpus: "0.5"
+      memory: 256M
+    reservations:
+      memory: 128M
 ```
+
+These limits prevent the container from consuming all available resources (512MB total RAM). You can adjust these values if needed based on your specific requirements.
 
 ## Performance Tuning for Raspberry Pi Zero 2 W
 

@@ -120,6 +120,15 @@ docker exec network-monitor /bin/bash -c "cd /app && ./serve.sh logs 80"
 docker ps | grep network-monitor
 docker logs network-monitor
 docker exec network-monitor pgrep -f monitor.sh
+docker exec network-monitor ps aux
+docker stats network-monitor --no-stream
+```
+
+**Stop processes inside container:**
+```bash
+docker exec network-monitor pkill -f monitor.sh
+docker exec network-monitor pkill -f serve.py
+# Or restart entire container: docker compose restart
 ```
 
 **Access web dashboard:**
@@ -245,9 +254,31 @@ document.addEventListener('visibilitychange', () => {
 
 ## Troubleshooting
 
+### Docker environment detection
+
+Shell scripts (serve.sh, visualize.sh) and serve.py detect Docker by checking for `/.dockerenv`:
+```bash
+# In shell scripts
+if [ -f "/.dockerenv" ]; then
+    python3 "$SCRIPT_DIR/serve.py" "$@"  # Use system python3
+else
+    source "$SCRIPT_DIR/venv/bin/activate"  # Use venv
+fi
+```
+
+```python
+# In serve.py
+if Path("/.dockerenv").exists():
+    python_executable = "python3"  # System packages
+else:
+    python_executable = str(venv_python)  # Venv
+```
+
+This allows the same scripts to work in both Docker (system packages) and native (venv) environments.
+
 ### Venv not activating in shell scripts
 
-The wrapper scripts (serve.sh, visualize.sh) automatically create and use venv:
+The wrapper scripts (serve.sh, visualize.sh) automatically create and use venv in native environments:
 ```bash
 if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
@@ -264,13 +295,25 @@ RUN apt-get update && apt-get install -y \
     bc \
     iputils-ping \
     curl \
+    procps \
     python3-pandas \
     python3-plotly \
     python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-This approach builds in ~2-3 minutes instead of 20-45 minutes required for pip compilation.
+This approach builds in ~10-15 minutes on Pi Zero 2 W instead of 20-45+ minutes required for pip compilation.
+
+**Resource limits are configured in docker-compose.yml:**
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 256M
+      cpus: '0.5'
+```
+
+This prevents the container from consuming all available resources on the Pi Zero 2 W (512MB total RAM).
 
 ### Memory constraints on Pi Zero 2 W
 
