@@ -168,6 +168,8 @@ docker logs network-monitor
 
 ## Systemd Services
 
+> **Important:** The systemd service files below assume the project is located at `/home/pi/network-monitor`. If you're using a different username or location, you **must** update the `WorkingDirectory` path in the `network-monitor-container.service` file to match your actual path (e.g., `/home/kirk/network-monitor`, `/home/user/code/network-monitor`, etc.).
+
 ### 1. Create Monitor Service
 
 Create `/etc/systemd/system/network-monitor-daemon.service`:
@@ -230,7 +232,7 @@ Create `/etc/systemd/system/network-monitor-container.service`:
 sudo nano /etc/systemd/system/network-monitor-container.service
 ```
 
-Add the following content:
+Add the following content (replace `/home/pi/network-monitor` with your actual path):
 
 ```ini
 [Unit]
@@ -241,7 +243,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/home/pi/network-monitor
+WorkingDirectory=/home/pi/network-monitor  # CHANGE THIS to your actual path!
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
 
@@ -333,7 +335,7 @@ sudo journalctl -u network-monitor-container.service -f
 
 To configure the monitor or server, you can modify the systemd service files or create an environment file.
 
-Create `/home/pi/scripts/network-monitor/.env`:
+Create `.env` in your project directory (adjust path as needed):
 
 ```bash
 MONITOR_FREQUENCY=1
@@ -342,11 +344,11 @@ SERVER_PORT=8080
 LOG_RETENTION_DAYS=10
 ```
 
-Update the service files to use these variables:
+Update the service files to use these variables (adjust path to match your installation):
 
 ```ini
 [Service]
-EnvironmentFile=/home/pi/scripts/network-monitor/.env
+EnvironmentFile=/home/pi/network-monitor/.env  # Update this path!
 ExecStart=/usr/bin/docker exec network-monitor /bin/bash -c "cd /app && ./monitor.sh ${MONITOR_FREQUENCY} ${MONITOR_SAMPLE_SIZE}"
 ```
 
@@ -397,7 +399,7 @@ sudo journalctl -u network-monitor-server.service -f
 
 ```bash
 # Logs are stored in ./logs on the host
-cd ~/scripts/network-monitor
+cd ~/network-monitor
 tar -czf network-monitor-logs-$(date +%Y%m%d).tar.gz logs/
 ```
 
@@ -461,7 +463,7 @@ sudo ufw allow 8080/tcp
 
 ```bash
 # Fix log directory permissions
-sudo chown -R $(whoami):$(whoami) ~/scripts/network-monitor/logs
+sudo chown -R $(whoami):$(whoami) ~/network-monitor/logs
 
 # Ensure container has necessary capabilities
 # Edit docker-compose.yml and add:
