@@ -488,7 +488,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
     def _generate_dynamic_chartjs_html(self, csv_file, date_str, csv_filename):
         """Generate dynamic HTML with Chart.js and WebSocket support."""
-        csv_url = f"/csv/{date_str}/csv/{csv_filename}"
+        csv_url = f"/csv/{date_str}/{csv_filename}"
 
         # Get WebSocket URL (same host, different port)
         ws_port = 8081  # WebSocket server port
