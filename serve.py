@@ -153,13 +153,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 </style>
 """
                 # Create navigation buttons HTML
+                prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
+                next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
+
                 nav_buttons = f"""
 <div class="nav-buttons">
     <button class="nav-btn" onclick="window.location.href='/'" title="Back to index">← Home</button>
 </div>
 <div class="nav-buttons-right">
-    <button class="nav-btn" {"disabled" if not prev_url else f"onclick=\"window.location.href='{prev_url}'\""} title="Previous file">← Prev</button>
-    <button class="nav-btn" {"disabled" if not next_url else f"onclick=\"window.location.href='{next_url}'\""} title="Next file">Next →</button>
+    <button class="nav-btn" {prev_btn_attr} title="Previous file">← Prev</button>
+    <button class="nav-btn" {next_btn_attr} title="Next file">Next →</button>
 </div>
 """
                 # Inject auto-refresh script before </body>
