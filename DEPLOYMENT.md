@@ -62,10 +62,10 @@ sudo apt install -y \
 
 Create a `Dockerfile` in the project root:
 
-> **Note**: This Dockerfile uses Miniconda base image for much faster builds with pre-compiled pandas and plotly packages. This is especially important for ARM devices like Raspberry Pi where compilation can take 30+ minutes.
+> **Note**: This Dockerfile is optimized for ARM devices like Raspberry Pi by using specific package versions with pre-built ARM wheels, avoiding long compilation times.
 
 ```dockerfile
-FROM continuumio/miniconda3:latest
+FROM python:3.11-slim-bookworm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -77,12 +77,18 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Install Python dependencies using conda (much faster)
-RUN conda install -y pandas plotly && \
-    conda clean -a
-
 # Copy application files
 COPY . .
+
+# Install Python dependencies directly (no venv for Docker)
+# Use specific versions that have ARM wheels available
+RUN pip install --upgrade pip && \
+    pip install --only-binary=:all: \
+        pandas==2.0.3 \
+        plotly==5.17.0 \
+    || pip install \
+        pandas==2.0.3 \
+        plotly==5.17.0
 
 # Create logs directory
 RUN mkdir -p logs
@@ -92,6 +98,9 @@ EXPOSE 80
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+
+# Keep container running
+CMD ["tail", "-f", "/dev/null"]
 
 ```
 
