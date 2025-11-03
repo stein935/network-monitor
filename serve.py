@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Live visualization server that regenerates the chart on each page load.
+Live visualization server with SQLite backend and hybrid caching.
 Usage: python serve.py [logs_dir] [port]
 """
 
@@ -15,9 +15,14 @@ import time
 from datetime import datetime
 import urllib.parse
 
+# Import database handler
+sys.path.insert(0, str(Path(__file__).parent))
+from db import NetworkMonitorDB
+
 
 class VisualizationHandler(BaseHTTPRequestHandler):
     logs_dir = None
+    db = None
 
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
@@ -38,18 +43,40 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 self.send_error(500, f"Error generating index: {str(e)}")
 
         elif self.path.startswith("/csv/"):
-            # Serve CSV files for dynamic visualization
+            # Export CSV from SQLite for dynamic visualization
             try:
-                # Path format: /csv/YYYY-MM-DD/monitor_YYYYMMDD_HH.csv
+                # Path format: /csv/YYYY-MM-DD/HH or /csv/YYYY-MM-DD/monitor_YYYYMMDD_HH.csv
                 csv_path = urllib.parse.unquote(self.path[5:])  # Remove /csv/ prefix
-                csv_file = self.logs_dir / csv_path
 
-                if not csv_file.exists() or not csv_file.is_file():
-                    self.send_error(404, f"CSV file not found: {csv_path}")
+                # Parse date and hour from path
+                if '/' in csv_path:
+                    parts = csv_path.split('/')
+                    date_str = parts[0]  # YYYY-MM-DD
+
+                    # Extract hour from filename or second part
+                    if len(parts) > 1:
+                        if parts[1].endswith('.csv'):
+                            # Format: monitor_YYYYMMDD_HH.csv
+                            hour_str = parts[1].split('_')[-1].replace('.csv', '')
+                            hour = int(hour_str)
+                        else:
+                            # Format: HH
+                            hour = int(parts[1])
+                    else:
+                        self.send_error(400, "Invalid CSV path format")
+                        return
+                else:
+                    self.send_error(400, "Invalid CSV path format")
                     return
 
-                with open(csv_file, 'rb') as f:
-                    content = f.read()
+                # Export from database
+                csv_content = self.db.export_to_csv(date_str, hour)
+
+                if not csv_content or csv_content == "timestamp, status, response_time, success_count, total_count, failed_count":
+                    self.send_error(404, f"No data found for {date_str} hour {hour}")
+                    return
+
+                content = csv_content.encode('utf-8')
 
                 self.send_response(200)
                 self.send_header("Content-type", "text/csv")
@@ -59,7 +86,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(content)
             except Exception as e:
-                self.send_error(500, f"Error serving CSV: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                self.send_error(500, f"Error exporting CSV: {str(e)}")
 
         elif self.path.startswith("/view/"):
             # Serve specific visualization
@@ -273,17 +302,18 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             self.send_error(404, "File not found")
 
     def _generate_index(self):
-        """Generate an index page listing all available CSV files."""
-        # Find all CSV files in the logs directory
-        csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"), reverse=True)
+        """Generate an index page listing all available hours from SQLite."""
+        # Get available hours from database
+        available_hours = self.db.get_available_hours()
 
         # Group by date
         files_by_date = {}
-        for csv_file in csv_files:
-            date_str = csv_file.parent.parent.name  # Get YYYY-MM-DD from path
-            if date_str not in files_by_date:
-                files_by_date[date_str] = []
-            files_by_date[date_str].append(csv_file)
+        for date, hour, count in available_hours:
+            if date not in files_by_date:
+                files_by_date[date] = []
+            # Create a pseudo-filename for compatibility
+            filename = f"monitor_{date.replace('-', '')}_{hour}.csv"
+            files_by_date[date].append((filename, hour, count))
 
         # Generate HTML
         html = """<!DOCTYPE html>
@@ -407,24 +437,19 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 """
 
         if not files_by_date:
-            html += '<div class="no-files">No monitoring data found. Run monitor.sh to create some!</div>'
+            html += '<div class="no-files">No monitoring data found. Run monitor.py to create some!</div>'
         else:
             for date_str in sorted(files_by_date.keys(), reverse=True):
                 html += f'<h2>Date: {date_str}</h2>\n<div class="file-list">\n'
 
-                for csv_file in sorted(files_by_date[date_str], reverse=True):
-                    filename = csv_file.name
-                    # Extract timestamp from filename: monitor_YYYYMMDD_HHMMSS.csv
-                    try:
-                        time_part = filename.split("_")[2].replace(".csv", "")
-                        formatted_time = f"{time_part[0:2]}:00 - {time_part[0:2]}:59"
-                    except Exception:
-                        formatted_time = "Unknown time"
+                for filename, hour, count in sorted(files_by_date[date_str], reverse=True):
+                    # Format time display
+                    formatted_time = f"{hour}:00 - {hour}:59"
 
                     view_url = f"/view/{date_str}/{filename}"
                     html += f'''    <div class="file-item">
         <a href="{view_url}">{filename}</a>
-        <span class="file-meta">Started at {formatted_time}</span>
+        <span class="file-meta">{formatted_time} ({count} entries)</span>
     </div>
 '''
 
@@ -710,17 +735,16 @@ if __name__ == "__main__":
     logs_path = Path(sys.argv[1]) if len(sys.argv) >= 2 else Path("logs")
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
 
-    if not logs_path.exists():
-        print(f"[!] Error: Directory not found: {logs_path}")
-        print(f"\nUsage: python serve.py [logs_dir] [port]")
-        print("\nExamples:")
-        print("  python serve.py                  # Use default 'logs' directory")
-        print("  python serve.py logs             # Specify logs directory")
-        print("  python serve.py logs 8080        # Specify directory and port")
-        sys.exit(1)
+    logs_path.mkdir(parents=True, exist_ok=True)
 
-    # Set the logs directory for the handler
+    # Initialize SQLite database
+    db_path = logs_path / "network_monitor.db"
+    db = NetworkMonitorDB(db_path)
+    print(f"[*] Database: {db_path}")
+
+    # Set the logs directory and database for the handler
     VisualizationHandler.logs_dir = logs_path
+    VisualizationHandler.db = db
 
     # Create server - bind to 0.0.0.0 to allow network access
     server = HTTPServer(("0.0.0.0", port), VisualizationHandler)
