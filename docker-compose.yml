@@ -1,6 +1,7 @@
 services:
   network-monitor:
     build: .
+    image: network-monitor:latest
     container_name: network-monitor
     restart: unless-stopped
     ports:
