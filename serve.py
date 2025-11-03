@@ -59,11 +59,17 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
                 # Run visualize.py to generate fresh HTML
                 script_dir = Path(__file__).parent
-                venv_python = script_dir / "venv" / "bin" / "python"
                 visualize_script = script_dir / "visualize.py"
 
+                # Check if running in Docker (use system python3) or native (use venv)
+                if Path("/.dockerenv").exists():
+                    python_executable = "python3"
+                else:
+                    venv_python = script_dir / "venv" / "bin" / "python"
+                    python_executable = str(venv_python)
+
                 result = subprocess.run(
-                    [str(venv_python), str(visualize_script), str(csv_file)],
+                    [python_executable, str(visualize_script), str(csv_file)],
                     capture_output=True,
                     text=True,
                 )
