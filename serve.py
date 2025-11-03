@@ -499,7 +499,8 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         # Get WebSocket URL (same host, different port)
         ws_port = 8081  # WebSocket server port
-        ws_url = f"ws://{{location.hostname}}:{ws_port}"
+        # Note: This will be inserted as a JavaScript template literal
+        ws_url = f"ws://${{location.hostname}}:{ws_port}"
 
         # Find all CSV files for navigation
         all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
@@ -647,7 +648,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
     <script>
         const csvUrl = '{csv_url}';
-        const wsUrl = '{ws_url}';
+        const wsUrl = `ws://${{location.hostname}}:{ws_port}`;
         let chart;
         let updateInterval;
         let ws;
