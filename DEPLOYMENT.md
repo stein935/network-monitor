@@ -182,7 +182,7 @@ Add the following content:
 
 ```ini
 [Unit]
-Description=Network Monitor Daemon (Docker)
+Description=Network Monitor Daemon (Docker - SQLite)
 After=docker.service
 Requires=docker.service
 
@@ -190,12 +190,14 @@ Requires=docker.service
 Type=simple
 Restart=always
 RestartSec=10
-ExecStart=/usr/bin/docker exec network-monitor /bin/bash -c "cd /app && ./monitor.sh 1 60"
-ExecStop=/usr/bin/docker exec network-monitor pkill -f monitor.sh
+ExecStart=/usr/bin/docker exec network-monitor python3 /app/monitor.py 1 60
+ExecStop=/usr/bin/docker exec network-monitor pkill -f monitor.py
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Note:** This uses the new Python/SQLite monitor (`monitor.py`). The old bash version (`monitor.sh`) is still available as a fallback.
 
 ### 2. Create Web Server Service
 
