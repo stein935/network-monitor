@@ -1,8 +1,9 @@
-FROM python:3.11-slim-bookworm
+FROM debian:bookworm-slim
 
-# Install system dependencies including pre-built Python packages
-# Using system packages avoids lengthy compilation on ARM devices
+# Install system dependencies including Python and pre-built packages
+# Using Debian base with system packages avoids lengthy compilation on ARM devices
 RUN apt-get update && apt-get install -y \
+  python3 \
   bc \
   iputils-ping \
   curl \
