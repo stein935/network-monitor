@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
   bc \
   iputils-ping \
   curl \
+  procps \
   python3-pandas \
   python3-plotly \
   python3-numpy \
