@@ -98,6 +98,10 @@ class NetworkMonitorDB:
 
     def export_to_csv(self, date_str, hour):
         """Export a specific hour to CSV format."""
+        # Ensure hour is an integer
+        if isinstance(hour, str):
+            hour = int(hour)
+
         logs = self.get_logs_by_hour(date_str, hour)
 
         csv_lines = ["timestamp, status, response_time, success_count, total_count, failed_count"]

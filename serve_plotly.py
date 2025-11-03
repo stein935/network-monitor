@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Live visualization server with SQLite backend, Chart.js, and WebSocket support.
+Live visualization server with SQLite backend and hybrid caching.
 Usage: python serve.py [logs_dir] [port]
 """
 
@@ -14,70 +14,10 @@ import threading
 import time
 from datetime import datetime
 import urllib.parse
-import asyncio
-import websockets
-import json
 
 # Import database handler
 sys.path.insert(0, str(Path(__file__).parent))
 from db import NetworkMonitorDB
-
-
-# Global WebSocket clients
-websocket_clients = set()
-
-
-async def websocket_handler(websocket):
-    """Handle WebSocket connections for real-time updates."""
-    global websocket_clients
-    websocket_clients.add(websocket)
-    print(f"[+] WebSocket client connected ({len(websocket_clients)} total)")
-
-    try:
-        # Send initial greeting
-        await websocket.send(json.dumps({
-            "type": "connected",
-            "message": "WebSocket connected - awaiting real-time updates"
-        }))
-
-        # Keep connection alive
-        async for message in websocket:
-            pass  # Client messages not currently handled
-    except websockets.exceptions.ConnectionClosed:
-        pass
-    finally:
-        websocket_clients.remove(websocket)
-        print(f"[-] WebSocket client disconnected ({len(websocket_clients)} remaining)")
-
-
-async def broadcast_update(db):
-    """Broadcast latest data to all connected WebSocket clients every 30 seconds."""
-    while True:
-        await asyncio.sleep(30)  # 30 second batches
-
-        if websocket_clients:
-            # Get latest log entry
-            latest = db.get_latest_log()
-
-            if latest:
-                timestamp, status, response_time, success_count, total_count, failed_count = latest
-
-                # Prepare update message
-                update = {
-                    "type": "update",
-                    "data": {
-                        "timestamp": timestamp,
-                        "status": status,
-                        "response_time": response_time,
-                        "success_count": success_count,
-                        "total_count": total_count,
-                        "failed_count": failed_count
-                    }
-                }
-
-                # Broadcast to all clients
-                websockets.broadcast(websocket_clients, json.dumps(update))
-                print(f"[*] Broadcast update to {len(websocket_clients)} client(s)")
 
 
 class VisualizationHandler(BaseHTTPRequestHandler):
@@ -180,12 +120,12 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 html_dir = self.logs_dir / date_str / "html"
                 html_file = html_dir / f"{csv_file.stem}_visualization.html"
 
-                # For current hour: use dynamic visualization with WebSocket support
+                # For current hour: use dynamic visualization
                 # For past hours: generate once and cache
                 if is_current_hour:
-                    # Serve dynamic HTML with Chart.js and WebSocket
-                    print("[*] Using dynamic Chart.js visualization with WebSocket (current hour)")
-                    html_content = self._generate_dynamic_chartjs_html(csv_file, date_str, csv_filename)
+                    # Serve dynamic HTML that updates from CSV
+                    print("[*] Using dynamic visualization (current hour)")
+                    html_content = self._generate_dynamic_html(csv_file, date_str, csv_filename)
                 else:
                     # For past hours, check if HTML exists, if not generate it once
                     if not html_file.exists():
@@ -302,10 +242,46 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     <button class="nav-btn" {next_btn_attr} title="Next file">Next →</button>
 </div>
 """
-                # Inject CSS and navigation buttons
+                # Inject auto-refresh script before </body>
+                auto_refresh_script = """
+<script>
+    // Auto-refresh every 60 seconds when page is visible
+    let refreshInterval;
+    
+    function startAutoRefresh() {
+        refreshInterval = setInterval(() => {
+            if (!document.hidden) {
+                console.log('Auto-refreshing visualization...');
+                location.reload();
+            }
+        }, 60000); // 60 seconds
+    }
+    
+    function stopAutoRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+    }
+    
+    // Start auto-refresh when page loads
+    startAutoRefresh();
+    
+    // Pause/resume based on page visibility
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopAutoRefresh();
+        } else {
+            startAutoRefresh();
+        }
+    });
+</script>
+"""
+                # Inject CSS, navigation buttons, and script
                 html_content = html_content.replace("</head>", gruvbox_css + "</head>")
                 html_content = html_content.replace("<body>", "<body>" + nav_buttons)
-
+                html_content = html_content.replace(
+                    "</body>", auto_refresh_script + "</body>"
+                )
                 content = html_content.encode("utf-8")
 
                 # Send response
@@ -318,11 +294,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(content)
 
-                print("[+] Served visualization")
+                print("[+] Served fresh visualization")
 
             except Exception as e:
-                import traceback
-                traceback.print_exc()
                 self.send_error(500, f"Error: {str(e)}")
         else:
             self.send_error(404, "File not found")
@@ -369,13 +343,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             --orange: #fe8019;
             --gray: #928374;
         }
-
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         html {
             background: var(--bg0-hard);
             min-height: 100vh;
@@ -458,7 +432,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 <body>
     <h1>Steineck Network Monitor</h1>
     <div class="refresh-note">
-        <strong>Tip:</strong> Current hour uses live Chart.js visualization with WebSocket updates. Past hours are cached.
+        <strong>Tip:</strong> Each visualization is regenerated fresh when you click on it.
     </div>
 """
 
@@ -486,13 +460,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         return html
 
-    def _generate_dynamic_chartjs_html(self, csv_file, date_str, csv_filename):
-        """Generate dynamic HTML with Chart.js and WebSocket support."""
+    def _generate_dynamic_html(self, csv_file, date_str, csv_filename):
+        """Generate dynamic HTML that fetches CSV and updates chart via JavaScript."""
         csv_url = f"/csv/{date_str}/csv/{csv_filename}"
-
-        # Get WebSocket URL (same host, different port)
-        ws_port = 8081  # WebSocket server port
-        ws_url = f"ws://{{location.hostname}}:{ws_port}"
 
         # Find all CSV files for navigation
         all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
@@ -522,7 +492,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 <html>
 <head>
     <title>Network Monitor - {csv_filename} (Live)</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
     <style>
         html, body {{
             background-color: #1d2021 !important;
@@ -532,27 +502,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             color: #ebdbb2;
             font-family: monospace;
         }}
-        .chart-container {{
-            position: relative;
-            width: 95%;
+        #chart {{
+            width: 100%;
             height: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            background: #282828;
-            border-radius: 8px;
-        }}
-        .chart-title {{
-            text-align: center;
-            color: #fe8019;
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }}
-        .chart-subtitle {{
-            text-align: center;
-            color: #ebdbb2;
-            font-size: 14px;
-            margin-bottom: 20px;
         }}
         .nav-buttons {{
             position: fixed;
@@ -600,35 +552,11 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             font-weight: bold;
             z-index: 1000;
         }}
-        .ws-status {{
-            position: fixed;
-            top: 60px;
-            right: 20px;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 12px;
-            z-index: 1000;
-        }}
-        .ws-connected {{
-            background: #8ec07c;
-            color: #1d2021;
-        }}
-        .ws-disconnected {{
-            background: #fb4934;
-            color: #1d2021;
-        }}
     </style>
 </head>
 <body>
     <div class="live-indicator">🔴 LIVE</div>
-    <div id="ws-status" class="ws-status ws-disconnected">WebSocket: Connecting...</div>
-
-    <div class="chart-title">Network Monitoring Dashboard (Live)</div>
-    <div class="chart-subtitle">{csv_filename}</div>
-
-    <div class="chart-container">
-        <canvas id="chart"></canvas>
-    </div>
+    <div id="chart"></div>
 
     <div class="nav-buttons">
         <button class="nav-btn" onclick="window.location.href='/'" title="Back to index">← Home</button>
@@ -640,10 +568,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
     <script>
         const csvUrl = '{csv_url}';
-        const wsUrl = '{ws_url}';
-        let chart;
         let updateInterval;
-        let ws;
 
         function parseCSV(csv) {{
             const lines = csv.trim().split('\\n');
@@ -678,215 +603,95 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     }});
 
                     // Color-code markers based on success rate
-                    const pointColors = successRates.map(rate => {{
+                    const colors = successRates.map(rate => {{
                         if (rate === 100) return '#b8bb26'; // green
                         if (rate === 0) return '#fb4934';   // red
                         return '#fe8019';                    // orange
                     }});
 
-                    const chartData = {{
-                        labels: timestamps,
-                        datasets: [
-                            {{
-                                label: 'Response Time (ms)',
-                                data: responseTimes,
-                                borderColor: '#83a598',
-                                backgroundColor: 'rgba(131, 165, 152, 0.1)',
-                                borderWidth: 2,
-                                pointRadius: 3,
-                                pointHoverRadius: 5,
-                                yAxisID: 'y',
-                                tension: 0.1
-                            }},
-                            {{
-                                label: 'Success Rate (%)',
-                                data: successRates,
-                                borderColor: '#8ec07c',
-                                backgroundColor: 'rgba(142, 192, 124, 0.2)',
-                                borderWidth: 2,
-                                pointRadius: 4,
-                                pointHoverRadius: 6,
-                                pointBackgroundColor: pointColors,
-                                pointBorderColor: pointColors,
-                                fill: true,
-                                yAxisID: 'y1',
-                                tension: 0.1
-                            }}
-                        ]
+                    const trace1 = {{
+                        x: timestamps,
+                        y: responseTimes,
+                        mode: 'lines+markers',
+                        name: 'Response Time (ms)',
+                        line: {{ color: '#83a598', width: 2 }},
+                        marker: {{ size: 4 }},
+                        yaxis: 'y'
                     }};
 
-                    const config = {{
-                        type: 'line',
-                        data: chartData,
-                        options: {{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            interaction: {{
-                                mode: 'index',
-                                intersect: false,
-                            }},
-                            plugins: {{
-                                legend: {{
-                                    display: true,
-                                    position: 'bottom',
-                                    labels: {{
-                                        color: '#ebdbb2',
-                                        font: {{
-                                            family: 'monospace',
-                                            size: 12
-                                        }},
-                                        padding: 20
-                                    }}
-                                }},
-                                tooltip: {{
-                                    backgroundColor: '#3c3836',
-                                    titleColor: '#fe8019',
-                                    bodyColor: '#ebdbb2',
-                                    borderColor: '#665c54',
-                                    borderWidth: 1,
-                                    padding: 12,
-                                    displayColors: true
-                                }}
-                            }},
-                            scales: {{
-                                x: {{
-                                    display: true,
-                                    title: {{
-                                        display: true,
-                                        text: 'Time',
-                                        color: '#ebdbb2',
-                                        font: {{
-                                            family: 'monospace',
-                                            size: 14
-                                        }}
-                                    }},
-                                    ticks: {{
-                                        color: '#ebdbb2',
-                                        font: {{
-                                            family: 'monospace'
-                                        }},
-                                        maxRotation: 45,
-                                        minRotation: 45
-                                    }},
-                                    grid: {{
-                                        color: '#504945',
-                                        drawBorder: true
-                                    }}
-                                }},
-                                y: {{
-                                    type: 'linear',
-                                    display: true,
-                                    position: 'left',
-                                    title: {{
-                                        display: true,
-                                        text: 'Response Time (ms)',
-                                        color: '#83a598',
-                                        font: {{
-                                            family: 'monospace',
-                                            size: 14
-                                        }}
-                                    }},
-                                    ticks: {{
-                                        color: '#ebdbb2',
-                                        font: {{
-                                            family: 'monospace'
-                                        }}
-                                    }},
-                                    grid: {{
-                                        color: '#504945',
-                                        drawBorder: true
-                                    }}
-                                }},
-                                y1: {{
-                                    type: 'linear',
-                                    display: true,
-                                    position: 'right',
-                                    title: {{
-                                        display: true,
-                                        text: 'Success Rate (%)',
-                                        color: '#8ec07c',
-                                        font: {{
-                                            family: 'monospace',
-                                            size: 14
-                                        }}
-                                    }},
-                                    min: 0,
-                                    max: 105,
-                                    ticks: {{
-                                        color: '#ebdbb2',
-                                        font: {{
-                                            family: 'monospace'
-                                        }}
-                                    }},
-                                    grid: {{
-                                        drawOnChartArea: false,
-                                        drawBorder: true,
-                                        color: '#504945'
-                                    }}
-                                }}
-                            }}
-                        }}
+                    const trace2 = {{
+                        x: timestamps,
+                        y: successRates,
+                        mode: 'lines+markers',
+                        name: 'Success Rate (%)',
+                        line: {{ color: '#8ec07c', width: 2 }},
+                        marker: {{ size: 6, color: colors }},
+                        fill: 'tozeroy',
+                        fillcolor: 'rgba(142, 192, 124, 0.2)',
+                        yaxis: 'y2'
                     }};
 
-                    if (chart) {{
-                        chart.data = chartData;
-                        chart.update('none'); // Update without animation for performance
-                    }} else {{
-                        chart = new Chart(document.getElementById('chart'), config);
-                    }}
+                    const layout = {{
+                        title: {{
+                            text: 'Network Monitoring Dashboard (Live)<br><sub>{csv_filename}</sub>',
+                            x: 0.5,
+                            xanchor: 'center',
+                            font: {{ color: '#fe8019', size: 20 }}
+                        }},
+                        xaxis: {{
+                            title: 'Time',
+                            gridcolor: '#504945',
+                            color: '#ebdbb2'
+                        }},
+                        yaxis: {{
+                            title: 'Response Time (ms)',
+                            side: 'left',
+                            showgrid: true,
+                            gridcolor: '#504945',
+                            color: '#ebdbb2'
+                        }},
+                        yaxis2: {{
+                            title: 'Success Rate (%)',
+                            overlaying: 'y',
+                            side: 'right',
+                            range: [0, 105],
+                            showgrid: false,
+                            color: '#ebdbb2'
+                        }},
+                        height: 600,
+                        hovermode: 'x unified',
+                        paper_bgcolor: '#1d2021',
+                        plot_bgcolor: '#282828',
+                        font: {{ color: '#ebdbb2', family: 'monospace' }},
+                        legend: {{
+                            orientation: 'h',
+                            yanchor: 'bottom',
+                            y: -0.3,
+                            xanchor: 'center',
+                            x: 0.5,
+                            bgcolor: '#3c3836',
+                            bordercolor: '#665c54',
+                            borderwidth: 1,
+                            font: {{ color: '#ebdbb2' }}
+                        }},
+                        margin: {{ b: 120 }}
+                    }};
+
+                    Plotly.newPlot('chart', [trace1, trace2], layout);
                 }})
                 .catch(error => {{
                     console.error('Error updating chart:', error);
                 }});
         }}
 
-        // WebSocket connection for real-time updates
-        function connectWebSocket() {{
-            ws = new WebSocket(wsUrl);
-
-            ws.onopen = () => {{
-                console.log('WebSocket connected');
-                document.getElementById('ws-status').textContent = 'WebSocket: Connected';
-                document.getElementById('ws-status').className = 'ws-status ws-connected';
-            }};
-
-            ws.onmessage = (event) => {{
-                const message = JSON.parse(event.data);
-
-                if (message.type === 'update') {{
-                    console.log('Received WebSocket update:', message.data);
-                    // Refresh chart with new data
-                    updateChart();
-                }}
-            }};
-
-            ws.onerror = (error) => {{
-                console.error('WebSocket error:', error);
-                document.getElementById('ws-status').textContent = 'WebSocket: Error';
-                document.getElementById('ws-status').className = 'ws-status ws-disconnected';
-            }};
-
-            ws.onclose = () => {{
-                console.log('WebSocket disconnected - falling back to polling');
-                document.getElementById('ws-status').textContent = 'WebSocket: Disconnected (Polling)';
-                document.getElementById('ws-status').className = 'ws-status ws-disconnected';
-
-                // Fallback to HTTP polling if WebSocket fails
-                startAutoUpdate();
-            }};
-        }}
-
         // Initial load
         updateChart();
 
-        // Try WebSocket connection
-        connectWebSocket();
-
-        // Auto-update every 60 seconds when page is visible (fallback if WebSocket fails)
+        // Auto-update every 60 seconds when page is visible
         function startAutoUpdate() {{
             updateInterval = setInterval(() => {{
                 if (!document.hidden) {{
-                    console.log('Auto-updating chart data (HTTP polling)...');
+                    console.log('Auto-updating chart data...');
                     updateChart();
                 }}
             }}, 60000); // 60 seconds
@@ -898,15 +703,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             }}
         }}
 
+        startAutoUpdate();
+
         // Pause/resume based on page visibility
         document.addEventListener('visibilitychange', () => {{
             if (document.hidden) {{
                 stopAutoUpdate();
-                if (ws) ws.close();
             }} else {{
-                if (!ws || ws.readyState !== WebSocket.OPEN) {{
-                    connectWebSocket();
-                }}
                 startAutoUpdate();
             }}
         }});
@@ -927,16 +730,13 @@ def open_browser(url, delay=1):
     webbrowser.open(url)
 
 
-async def start_websocket_server(db, port=8081):
-    """Start WebSocket server."""
-    async with websockets.serve(websocket_handler, "0.0.0.0", port):
-        print(f"[*] WebSocket server started on port {port}")
-        # Start broadcast task
-        await broadcast_update(db)
+if __name__ == "__main__":
+    # Default to logs directory if no argument provided
+    logs_path = Path(sys.argv[1]) if len(sys.argv) >= 2 else Path("logs")
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
 
+    logs_path.mkdir(parents=True, exist_ok=True)
 
-def run_http_server(logs_path, port):
-    """Run HTTP server in separate thread."""
     # Initialize SQLite database
     db_path = logs_path / "network_monitor.db"
     db = NetworkMonitorDB(db_path)
@@ -965,9 +765,9 @@ def run_http_server(logs_path, port):
 
     print("\n[*] Live visualization server starting...")
     print(f"[*] Logs directory: {logs_path}")
-    print(f"[*] HTTP server: {network_url}")
-    print("[*] Current hour: Chart.js with WebSocket real-time updates (30s batches)")
-    print("[*] Past hours: Cached static visualizations")
+    print(f"[*] Local access: {local_url}")
+    print(f"[*] Network access: {network_url}")
+    print("[*] Each visualization will regenerate fresh when you click on it")
     print("\n[*] Press Ctrl+C to stop the server\n")
 
     # Open browser in background
@@ -976,27 +776,5 @@ def run_http_server(logs_path, port):
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n\n[*] Shutting down HTTP server...")
+        print("\n\n[*] Shutting down server...")
         server.shutdown()
-
-
-if __name__ == "__main__":
-    # Default to logs directory if no argument provided
-    logs_path = Path(sys.argv[1]) if len(sys.argv) >= 2 else Path("logs")
-    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
-
-    logs_path.mkdir(parents=True, exist_ok=True)
-
-    # Initialize database
-    db_path = logs_path / "network_monitor.db"
-    db = NetworkMonitorDB(db_path)
-
-    # Run HTTP server in separate thread
-    http_thread = threading.Thread(target=run_http_server, args=(logs_path, port), daemon=True)
-    http_thread.start()
-
-    # Run WebSocket server in main event loop
-    try:
-        asyncio.run(start_websocket_server(db, port=8081))
-    except KeyboardInterrupt:
-        print("\n\n[*] Shutting down servers...")

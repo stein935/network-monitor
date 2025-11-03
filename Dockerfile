@@ -4,6 +4,7 @@ FROM debian:bookworm-slim
 # Using Debian base with system packages avoids lengthy compilation on ARM devices
 RUN apt-get update && apt-get install -y \
   python3 \
+  python3-pip \
   bc \
   iputils-ping \
   curl \
@@ -11,6 +12,7 @@ RUN apt-get update && apt-get install -y \
   python3-pandas \
   python3-plotly \
   python3-numpy \
+  python3-websockets \
   && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -22,8 +24,8 @@ COPY . .
 # Create logs directory
 RUN mkdir -p logs
 
-# Expose web server port
-EXPOSE 80
+# Expose web server port and WebSocket port
+EXPOSE 80 8081
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

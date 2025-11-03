@@ -21,7 +21,7 @@ This document describes the comprehensive optimization being implemented to dram
 - CSV generated dynamically when viewing historical data
 
 ### 2. Chart.js (Replacing Plotly)
-**Status:** Planned
+**Status:** ✅ COMPLETED (Phase 2)
 **Impact:** 93% smaller bundle (3MB → 200KB)
 
 **Benefits:**
@@ -29,25 +29,31 @@ This document describes the comprehensive optimization being implemented to dram
 - Lower memory footprint
 - Simpler, faster rendering
 - Still has zoom, pan, hover
+- Smooth updates without full page reload
 
-**Trade-offs:**
-- Slightly less fancy interactions
-- Different API (but similar functionality)
+**Implementation:**
+- Replaced Plotly with Chart.js 4.4.0
+- Dynamic chart updates without animation for performance
+- Maintains Gruvbox theme
+- Color-coded markers (green=100%, orange=partial, red=fail)
 
 ### 3. WebSocket Real-Time Updates
-**Status:** Planned
+**Status:** ✅ COMPLETED (Phase 2)
 **Batch Frequency:** 30 seconds
 
 **Benefits:**
-- True real-time updates (no polling)
-- Server pushes data to clients
+- True real-time updates (no polling for current hour)
+- Server pushes data to clients every 30s
 - Lower CPU (no repeated HTTP requests)
 - Instant feedback when network issues occur
+- Graceful fallback to 60s polling if WebSocket fails
 
 **Implementation:**
-- WebSocket endpoint: `ws://localhost:8080/ws`
+- WebSocket endpoint: `ws://localhost:8081`
+- HTTP server on port 8080, WebSocket on port 8081
 - Batches updates every 30s
-- Graceful fallback to 60s polling if WebSocket fails
+- Automatic reconnection on disconnect
+- Falls back to HTTP polling if WebSocket unavailable
 
 ### 4. nginx Reverse Proxy
 **Status:** Planned
@@ -92,18 +98,18 @@ Client → nginx:8080 → Python WebSocket:8081 (dynamic)
 
 ## Deployment Strategy
 
-###  Phase 1: SQLite Migration (Safe, Reversible)
-1. Deploy `db.py` and `monitor.py`
-2. Run both old and new monitor in parallel for 1 hour
-3. Verify data integrity
-4. Switch systemd to use `monitor.py`
-5. Keep `monitor.sh` as backup
+### ✅ Phase 1: SQLite Migration (COMPLETED)
+1. ✅ Deploy `db.py` and `monitor.py`
+2. ✅ Run both old and new monitor in parallel for 1 hour
+3. ✅ Verify data integrity
+4. ✅ Switch systemd to use `monitor.py`
+5. ✅ Keep `monitor.sh` as backup
 
-### Phase 2: Chart.js + WebSocket
-1. Update `serve.py` with Chart.js templates
-2. Add WebSocket support
-3. Test with single client
-4. Deploy to production
+### ✅ Phase 2: Chart.js + WebSocket (COMPLETED)
+1. ✅ Update `serve.py` with Chart.js templates
+2. ✅ Add WebSocket support (port 8081)
+3. ✅ Test locally
+4. ⏳ Deploy to Raspberry Pi
 
 ### Phase 3: nginx + Pre-generation
 1. Install and configure nginx
