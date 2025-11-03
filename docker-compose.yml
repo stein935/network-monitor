@@ -5,19 +5,12 @@ services:
     container_name: network-monitor
     restart: unless-stopped
     ports:
-      - "8080:80"    # HTTP server
-      - "8081:8081"  # WebSocket server
+      - "8080:8080" # HTTP server
+      - "8081:8081" # WebSocket server
     volumes:
       - ./logs:/app/logs
     network_mode: bridge
     privileged: true # Required for ping
     cap_add:
       - NET_RAW
-      - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          memory: 256M        # Maximum memory
-          cpus: '0.5'         # Maximum 50% of one CPU core
-        reservations:
-          memory: 128M        # Guaranteed minimum memory
+      - NET_ADMIN # Guaranteed minimum memory
