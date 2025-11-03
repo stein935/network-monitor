@@ -112,7 +112,7 @@ services:
     container_name: network-monitor
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     volumes:
       - ./logs:/app/logs
     network_mode: bridge
@@ -308,10 +308,10 @@ docker exec network-monitor ls -la /app/logs/
 
 ```bash
 # Test locally on Pi
-curl http://localhost:80
+curl http://localhost:8080
 
 # From another device on network
-# Open browser to: http://<raspberry-pi-ip>
+# Open browser to: http://<raspberry-pi-ip>:8080
 ```
 
 ### 4. View Service Logs
@@ -338,7 +338,7 @@ Create `/home/pi/scripts/network-monitor/.env`:
 ```bash
 MONITOR_FREQUENCY=1
 MONITOR_SAMPLE_SIZE=60
-SERVER_PORT=80
+SERVER_PORT=8080
 LOG_RETENTION_DAYS=10
 ```
 
@@ -419,8 +419,8 @@ docker image prune -a -f
 # Check Docker logs
 docker logs network-monitor
 
-# Check if port 80 is already in use
-sudo netstat -tlnp | grep :80
+# Check if port 8080 is already in use
+sudo netstat -tlnp | grep :8080
 
 # Try rebuilding
 docker compose down
@@ -454,7 +454,7 @@ docker exec network-monitor curl http://localhost:80
 
 # Check firewall (if enabled)
 sudo ufw status
-sudo ufw allow 80/tcp
+sudo ufw allow 8080/tcp
 ```
 
 ### Permission Issues
@@ -542,7 +542,7 @@ sudo ufw enable
 sudo ufw allow ssh
 
 # Allow web server port
-sudo ufw allow 80/tcp
+sudo ufw allow 8080/tcp
 
 # Check status
 sudo ufw status
@@ -613,7 +613,7 @@ sudo systemctl restart network-monitor-daemon.service
 sudo systemctl restart network-monitor-server.service
 
 # View web server URL
-echo "http://$(hostname -I | awk '{print $1}')"
+echo "http://$(hostname -I | awk '{print $1}'):8080"
 
 # Access container shell
 docker exec -it network-monitor /bin/bash
@@ -624,7 +624,7 @@ docker exec network-monitor tail -f /app/logs/$(date +%Y-%m-%d)/csv/monitor_$(da
 
 ## Next Steps
 
-1. Access the web dashboard at `http://<raspberry-pi-ip>`
+1. Access the web dashboard at `http://<raspberry-pi-ip>:8080`
 2. Monitor the Gruvbox-themed visualizations
 3. Check logs are being created in the `logs/` directory
 4. Verify auto-cleanup is removing logs older than 10 days
