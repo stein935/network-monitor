@@ -1,0 +1,125 @@
+.PHONY: help dev build start stop restart logs shell test clean deploy status
+
+# Default target
+help:
+	@echo "Network Monitor - Development Commands"
+	@echo ""
+	@echo "Local Development:"
+	@echo "  make dev          - Quick dev: copy code to running container & restart"
+	@echo "  make build        - Build Docker image from scratch"
+	@echo "  make start        - Start container and services"
+	@echo "  make restart      - Restart services in container"
+	@echo "  make stop         - Stop and remove container"
+	@echo ""
+	@echo "Debugging:"
+	@echo "  make logs         - Follow container logs"
+	@echo "  make shell        - Open bash shell in container"
+	@echo "  make status       - Check status of all services"
+	@echo "  make test         - Test HTTP endpoints"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  make clean        - Remove container, image, and logs"
+	@echo "  make deploy       - Deploy to Raspberry Pi"
+
+# Quick development: copy code and restart
+dev:
+	@echo "📦 Copying code to container..."
+	docker cp serve.py network-monitor:/app/serve.py
+	docker cp db.py network-monitor:/app/db.py
+	docker cp monitor.py network-monitor:/app/monitor.py
+	@echo "🔄 Restarting services..."
+	docker exec network-monitor pkill -f serve.py || true
+	docker exec network-monitor nginx -s quit || true
+	docker exec -d network-monitor /bin/bash /app/start_services.sh
+	@echo "✅ Dev environment updated!"
+	@echo "🌐 Open http://localhost:8080"
+
+# Build from scratch
+build:
+	@echo "🏗️  Building Docker image..."
+	docker compose down || true
+	docker compose build --no-cache
+	@echo "✅ Build complete!"
+
+# Start everything fresh
+start:
+	@echo "🚀 Starting container..."
+	docker compose up -d
+	@sleep 3
+	@echo "📊 Starting monitor (generates data)..."
+	docker exec -d network-monitor python3 /app/monitor.py 1 60
+	@echo "⏳ Waiting 30 seconds for initial data..."
+	@sleep 30
+	@echo "🌐 Starting web services..."
+	docker exec -d network-monitor /bin/bash /app/start_services.sh
+	@sleep 2
+	@echo "✅ All services started!"
+	@echo "🌐 Open http://localhost:8080"
+
+# Restart services only (no rebuild)
+restart:
+	@echo "🔄 Restarting services..."
+	docker exec network-monitor pkill -f monitor.py || true
+	docker exec network-monitor pkill -f serve.py || true
+	docker exec network-monitor nginx -s quit || true
+	@sleep 2
+	docker exec -d network-monitor python3 /app/monitor.py 1 60
+	docker exec -d network-monitor /bin/bash /app/start_services.sh
+	@echo "✅ Services restarted!"
+
+# Stop everything
+stop:
+	@echo "🛑 Stopping container..."
+	docker compose down
+	@echo "✅ Stopped!"
+
+# View logs
+logs:
+	@echo "📋 Following logs (Ctrl+C to exit)..."
+	docker logs network-monitor -f
+
+# Open shell in container
+shell:
+	@echo "🐚 Opening shell in container..."
+	docker exec -it network-monitor /bin/bash
+
+# Check status
+status:
+	@echo "📊 Container Status:"
+	@docker ps | grep network-monitor || echo "  ❌ Container not running"
+	@echo ""
+	@echo "📊 Processes in Container:"
+	@docker exec network-monitor ps aux | grep -E "nginx|serve.py|monitor.py" || echo "  ❌ No services running"
+	@echo ""
+	@echo "📊 Database Status:"
+	@docker exec network-monitor python3 -c "from db import NetworkMonitorDB; db = NetworkMonitorDB('logs/network_monitor.db'); hours = db.get_available_hours(); print(f'  ✅ {len(hours)} hours of data available')" || echo "  ❌ Database error"
+	@echo ""
+	@echo "📊 Listening Ports:"
+	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -E "8080|8081|8090" || echo "  ❌ No ports listening"
+
+# Test endpoints
+test:
+	@echo "🧪 Testing HTTP endpoint..."
+	@curl -s http://localhost:8080 | head -5 || echo "❌ Failed"
+	@echo ""
+	@echo "🧪 Testing WebSocket port..."
+	@nc -zv localhost 8081 2>&1 | head -1
+
+# Clean everything
+clean:
+	@echo "🧹 Cleaning up..."
+	docker compose down || true
+	docker rm -f network-monitor 2>/dev/null || true
+	docker rmi network-monitor:latest 2>/dev/null || true
+	@echo "⚠️  Delete logs? (y/N): " && read ans && [ $${ans:-N} = y ] && rm -rf logs/* || true
+	@echo "✅ Cleanup complete!"
+
+# Deploy to Raspberry Pi
+deploy:
+	@echo "🚀 Deploying to Raspberry Pi..."
+	@echo "📤 Pushing to GitHub..."
+	git push origin main
+	@echo "📥 Run on Pi:"
+	@echo "  cd ~/network-monitor"
+	@echo "  git pull origin main"
+	@echo "  sudo systemctl restart network-monitor-server.service"

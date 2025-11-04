@@ -1,0 +1,21 @@
+{
+  "name": "network-monitor",
+  "version": "1.0.0",
+  "description": "Network monitoring with SQLite, Chart.js, and WebSocket",
+  "scripts": {
+    "dev": "make dev",
+    "build": "make build",
+    "start": "make start",
+    "restart": "make restart",
+    "stop": "make stop",
+    "logs": "make logs",
+    "shell": "make shell",
+    "status": "make status",
+    "test": "make test",
+    "clean": "make clean",
+    "deploy": "make deploy"
+  },
+  "keywords": ["network", "monitoring", "sqlite", "websocket"],
+  "author": "",
+  "license": "MIT"
+}
