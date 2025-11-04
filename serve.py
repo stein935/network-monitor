@@ -890,26 +890,8 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         """Generate static Chart.js HTML for past hours (no WebSocket)."""
         csv_url = f"/csv/{date_str}/{csv_filename}"
 
-        # Find all CSV files for navigation
-        all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
-        current_index = None
-        for i, f in enumerate(all_csv_files):
-            if f == csv_file:
-                current_index = i
-                break
-
-        # Determine previous and next files
-        prev_url = None
-        next_url = None
-        if current_index is not None:
-            if current_index > 0:
-                prev_file = all_csv_files[current_index - 1]
-                prev_date = prev_file.parent.parent.name
-                prev_url = f"/view/{prev_date}/{prev_file.name}"
-            if current_index < len(all_csv_files) - 1:
-                next_file = all_csv_files[current_index + 1]
-                next_date = next_file.parent.parent.name
-                next_url = f"/view/{next_date}/{next_file.name}"
+        # Get navigation from database (not filesystem)
+        prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
 
         prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
         next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
