@@ -24,13 +24,26 @@ help:
 # Quick development: copy code and restart
 dev:
 	@echo "📦 Copying code to container..."
-	docker cp serve.py network-monitor:/app/serve.py
-	docker cp db.py network-monitor:/app/db.py
-	docker cp monitor.py network-monitor:/app/monitor.py
-	@echo "🔄 Restarting services..."
-	docker exec network-monitor pkill -f serve.py || true
-	docker exec network-monitor nginx -s quit || true
-	docker exec -d network-monitor /bin/bash /app/start_services.sh
+	@docker cp serve.py network-monitor:/app/serve.py
+	@docker cp db.py network-monitor:/app/db.py
+	@docker cp monitor.py network-monitor:/app/monitor.py
+	@docker cp start_services.sh network-monitor:/app/start_services.sh
+	@docker exec network-monitor chmod +x /app/start_services.sh
+	@echo "🔄 Stopping services..."
+	@docker exec network-monitor pkill -f serve.py 2>/dev/null || true
+	@docker exec network-monitor nginx -s quit 2>/dev/null || true
+	@sleep 2
+	@echo "🚀 Starting nginx..."
+	@docker exec network-monitor nginx -t
+	@docker exec network-monitor nginx
+	@echo "🚀 Starting Python server..."
+	@docker exec -d network-monitor python3 /app/serve.py logs 8090
+	@sleep 2
+	@echo "🔍 Verifying services..."
+	@docker exec network-monitor pgrep -f serve.py > /dev/null && echo "  ✅ serve.py running" || echo "  ❌ serve.py failed to start"
+	@docker exec network-monitor pgrep nginx > /dev/null && echo "  ✅ nginx running" || echo "  ❌ nginx failed to start"
+	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -q 8090 && echo "  ✅ Port 8090 listening" || echo "  ⚠️  Port 8090 not listening"
+	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -q 8081 && echo "  ✅ Port 8081 listening" || echo "  ⚠️  Port 8081 not listening"
 	@echo "✅ Dev environment updated!"
 	@echo "🌐 Open http://localhost:8080"
 
