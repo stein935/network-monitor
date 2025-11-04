@@ -96,10 +96,37 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     db = None
 
     def do_GET(self):
-        if self.path == "/" or self.path == "/index.html":
-            # Serve index page with list of all CSV files
+        # Serve static files (CSS, JS)
+        if self.path.startswith("/static/"):
             try:
-                html = self._generate_index()
+                static_path = Path(__file__).parent / self.path[1:]  # Remove leading /
+                if static_path.exists() and static_path.is_file():
+                    with open(static_path, 'rb') as f:
+                        content = f.read()
+
+                    # Determine content type
+                    if self.path.endswith('.css'):
+                        content_type = 'text/css'
+                    elif self.path.endswith('.js'):
+                        content_type = 'application/javascript'
+                    else:
+                        content_type = 'text/plain'
+
+                    self.send_response(200)
+                    self.send_header("Content-type", content_type)
+                    self.send_header("Content-Length", len(content))
+                    self.send_header("Cache-Control", "public, max-age=3600")
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    self.send_error(404, "Static file not found")
+            except Exception as e:
+                self.send_error(500, f"Error serving static file: {str(e)}")
+
+        elif self.path == "/" or self.path == "/index.html":
+            # Serve single-page dashboard
+            try:
+                html = self._generate_single_page_dashboard()
                 content = html.encode()
 
                 self.send_response(200)
@@ -111,7 +138,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(content)
             except Exception as e:
-                self.send_error(500, f"Error generating index: {str(e)}")
+                self.send_error(500, f"Error generating dashboard: {str(e)}")
 
         elif self.path.startswith("/csv/"):
             # Export CSV from SQLite for dynamic visualization
@@ -460,6 +487,171 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         html += """</body>
 </html>"""
+
+        return html
+
+    def _generate_single_page_dashboard(self):
+        """Generate single-page dashboard with chart and data listing."""
+        # Get available hours from database
+        available_hours = self.db.get_available_hours()
+
+        if not available_hours:
+            return '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitoring Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="terminal-prompt">
+                <span class="prompt-symbol">$</span>
+                <span class="command">./network-monitor --live --dashboard</span>
+            </div>
+        </div>
+        <div class="data-section">
+            <p style="text-align: center; color: var(--gray); padding: 40px;">
+                No monitoring data found. Run monitor.py to create some!
+            </p>
+        </div>
+    </div>
+</body>
+</html>'''
+
+        # Get the most recent entry (first in list since sorted DESC)
+        initial_date, initial_hour_str, _ = available_hours[0]
+        initial_hour = int(initial_hour_str)
+
+        # Check if initial hour is current hour
+        now = datetime.now()
+        current_date_str = now.strftime("%Y-%m-%d")
+        current_hour_num = now.hour
+        is_current_hour = (initial_date == current_date_str and initial_hour == current_hour_num)
+
+        # Create initial filename for display
+        initial_filename = f"monitor_{initial_date.replace('-', '')}_{initial_hour:02d}.csv"
+
+        # Group hours by date
+        files_by_date = {}
+        for date, hour, count in available_hours:
+            if date not in files_by_date:
+                files_by_date[date] = []
+            hour_int = int(hour)
+            filename = f"monitor_{date.replace('-', '')}_{hour_int:02d}.csv"
+            formatted_time = f"{hour_int:02d}:00 - {hour_int:02d}:59"
+            files_by_date[date].append((filename, date, hour_int, formatted_time, count))
+
+        # Get navigation URLs for initial view
+        prev_url, next_url = self._get_navigation_urls(initial_date, initial_hour)
+
+        # Build the HTML
+        html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitoring Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="terminal-prompt">
+                <span class="prompt-symbol">$</span>
+                <span class="command">./network-monitor --live --dashboard</span>
+            </div>
+            <div class="status-bar">
+                <div class="file-info">
+                    <span style="color: var(--gray);">reading:</span>
+                    <span class="file-name">{initial_filename}</span>
+                </div>
+                <div class="status-indicators">
+                    <div class="live-indicator" style="display: {'flex' if is_current_hour else 'none'};">
+                        <div class="live-dot"></div>
+                        <span>Live</span>
+                    </div>
+                    <div class="websocket-status">
+                        WebSocket: Connecting...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="chart-container">
+            <div class="chart-wrapper">
+                <canvas id="networkChart"></canvas>
+            </div>
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--blue);"></div>
+                    <span>Response Time (ms)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--green);"></div>
+                    <span>Success Rate (%)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="navigation">
+            <button class="nav-button" onclick="goHome()">
+                <span>←</span> Home
+            </button>
+            <div class="nav-group">
+                <button class="nav-button" id="prevBtn" data-url="{prev_url or ''}" {'disabled' if not prev_url else ''} onclick="goPrevious()">
+                    <span>←</span> Prev
+                </button>
+                <button class="nav-button" id="nextBtn" data-url="{next_url or ''}" {'disabled' if not next_url else ''} onclick="goNext()">
+                    Next <span>→</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Available Data Section -->
+        <div class="data-section">
+'''
+
+        # Add date groups
+        for date_str in sorted(files_by_date.keys(), reverse=True):
+            html += f'''            <div class="date-group">
+                <div class="date-group-title">Date: {date_str}</div>
+                <div class="data-list">
+'''
+            for filename, date, hour, formatted_time, count in files_by_date[date_str]:
+                # Check if this is the active (initial) item
+                is_active = (date == initial_date and hour == initial_hour)
+                active_class = ' active' if is_active else ''
+
+                html += f'''                    <div class="data-item{active_class}" data-date="{date}" data-hour="{hour}" onclick="loadDataItem('{date}', {hour}, this)">
+                        <span class="data-filename">{filename}</span>
+                        <span class="data-meta">{formatted_time} ({count} entries)</span>
+                    </div>
+'''
+            html += '''                </div>
+            </div>
+'''
+
+        html += '''        </div>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+    <script>
+        // Initialize with current data
+        const INITIAL_DATE = "''' + initial_date + '''";
+        const INITIAL_HOUR = ''' + str(initial_hour) + ''';
+        const INITIAL_IS_CURRENT_HOUR = ''' + ('true' if is_current_hour else 'false') + ''';
+    </script>
+</body>
+</html>'''
 
         return html
 

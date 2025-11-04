@@ -28,6 +28,8 @@ dev:
 	@docker cp db.py network-monitor:/app/db.py
 	@docker cp monitor.py network-monitor:/app/monitor.py
 	@docker cp start_services.sh network-monitor:/app/start_services.sh
+	@docker cp nginx.conf network-monitor:/etc/nginx/nginx.conf
+	@docker cp static network-monitor:/app/
 	@docker exec network-monitor chmod +x /app/start_services.sh
 	@echo "🔄 Stopping services..."
 	@docker exec network-monitor pkill -f serve.py 2>/dev/null || true
