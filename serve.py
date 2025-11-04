@@ -35,10 +35,14 @@ async def websocket_handler(websocket):
 
     try:
         # Send initial greeting
-        await websocket.send(json.dumps({
-            "type": "connected",
-            "message": "WebSocket connected - awaiting real-time updates"
-        }))
+        await websocket.send(
+            json.dumps(
+                {
+                    "type": "connected",
+                    "message": "WebSocket connected - awaiting real-time updates",
+                }
+            )
+        )
 
         # Keep connection alive
         async for message in websocket:
@@ -60,7 +64,14 @@ async def broadcast_update(db):
             latest = db.get_latest_log()
 
             if latest:
-                timestamp, status, response_time, success_count, total_count, failed_count = latest
+                (
+                    timestamp,
+                    status,
+                    response_time,
+                    success_count,
+                    total_count,
+                    failed_count,
+                ) = latest
 
                 # Prepare update message
                 update = {
@@ -71,8 +82,8 @@ async def broadcast_update(db):
                         "response_time": response_time,
                         "success_count": success_count,
                         "total_count": total_count,
-                        "failed_count": failed_count
-                    }
+                        "failed_count": failed_count,
+                    },
                 }
 
                 # Broadcast to all clients
@@ -109,15 +120,15 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 csv_path = urllib.parse.unquote(self.path[5:])  # Remove /csv/ prefix
 
                 # Parse date and hour from path
-                if '/' in csv_path:
-                    parts = csv_path.split('/')
+                if "/" in csv_path:
+                    parts = csv_path.split("/")
                     date_str = parts[0]  # YYYY-MM-DD
 
                     # Extract hour from filename or second part
                     if len(parts) > 1:
-                        if parts[1].endswith('.csv'):
+                        if parts[1].endswith(".csv"):
                             # Format: monitor_YYYYMMDD_HH.csv
-                            hour_str = parts[1].split('_')[-1].replace('.csv', '')
+                            hour_str = parts[1].split("_")[-1].replace(".csv", "")
                             hour = int(hour_str)
                         else:
                             # Format: HH
@@ -132,11 +143,15 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 # Export from database
                 csv_content = self.db.export_to_csv(date_str, hour)
 
-                if not csv_content or csv_content == "timestamp, status, response_time, success_count, total_count, failed_count":
+                if (
+                    not csv_content
+                    or csv_content
+                    == "timestamp, status, response_time, success_count, total_count, failed_count"
+                ):
                     self.send_error(404, f"No data found for {date_str} hour {hour}")
                     return
 
-                content = csv_content.encode('utf-8')
+                content = csv_content.encode("utf-8")
 
                 self.send_response(200)
                 self.send_header("Content-type", "text/csv")
@@ -147,6 +162,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
             except Exception as e:
                 import traceback
+
                 traceback.print_exc()
                 self.send_error(500, f"Error exporting CSV: {str(e)}")
 
@@ -164,7 +180,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 csv_filename = "/".join(parts[1:])
 
                 # Extract hour from filename (format: monitor_YYYYMMDD_HH.csv)
-                hour_str = csv_filename.split('_')[-1].replace('.csv', '')
+                hour_str = csv_filename.split("_")[-1].replace(".csv", "")
                 hour = int(hour_str)
 
                 # Check if data exists in database
@@ -180,9 +196,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 now = datetime.now()
                 current_date_str = now.strftime("%Y-%m-%d")
                 current_hour_str = now.strftime("%Y%m%d_%H")
-                is_current_hour = (date_str == current_date_str and current_hour_str in csv_filename)
+                is_current_hour = (
+                    date_str == current_date_str and current_hour_str in csv_filename
+                )
 
-                print(f"\n[*] Serving visualization for: {csv_file.name} (current_hour={is_current_hour})")
+                print(
+                    f"\n[*] Serving visualization for: {csv_file.name} (current_hour={is_current_hour})"
+                )
 
                 html_dir = self.logs_dir / date_str / "html"
                 html_file = html_dir / f"{csv_file.stem}_visualization.html"
@@ -192,10 +212,14 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 # Past hours: static Chart.js without WebSocket
                 if is_current_hour:
                     print("[*] Serving Chart.js with WebSocket (current hour)")
-                    html_content = self._generate_chartjs_with_websocket(csv_file, date_str, csv_filename)
+                    html_content = self._generate_chartjs_with_websocket(
+                        csv_file, date_str, csv_filename
+                    )
                 else:
                     print("[*] Serving Chart.js static (past hour)")
-                    html_content = self._generate_chartjs_static(csv_file, date_str, csv_filename)
+                    html_content = self._generate_chartjs_static(
+                        csv_file, date_str, csv_filename
+                    )
 
                 # Get navigation from database (not filesystem)
                 prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
@@ -247,8 +271,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 </style>
 """
                 # Create navigation buttons HTML
-                prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
-                next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
+                prev_btn_attr = (
+                    "disabled"
+                    if not prev_url
+                    else f"onclick=\"window.location.href='{prev_url}'\""
+                )
+                next_btn_attr = (
+                    "disabled"
+                    if not next_url
+                    else f"onclick=\"window.location.href='{next_url}'\""
+                )
 
                 nav_buttons = f"""
 <div class="nav-buttons">
@@ -279,6 +311,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
             except Exception as e:
                 import traceback
+
                 traceback.print_exc()
                 self.send_error(500, f"Error: {str(e)}")
         else:
@@ -425,7 +458,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             for date_str in sorted(files_by_date.keys(), reverse=True):
                 html += f'<h2>Date: {date_str}</h2>\n<div class="file-list">\n'
 
-                for filename, hour, count in sorted(files_by_date[date_str], reverse=True):
+                for filename, hour, count in sorted(
+                    files_by_date[date_str], reverse=True
+                ):
                     # Format time display
                     formatted_time = f"{hour}:00 - {hour}:59"
 
@@ -446,14 +481,18 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     def _get_navigation_urls(self, date_str, csv_filename):
         """Get previous and next URLs from database available hours."""
         # Extract hour from filename (monitor_20251103_23.csv -> 23)
-        hour_str = csv_filename.split('_')[-1].replace('.csv', '')
+        hour_str = csv_filename.split("_")[-1].replace(".csv", "")
         hour = int(hour_str)
 
         # Get all available hours from database
-        all_hours = self.db.get_available_hours()  # Returns list of (date, hour_str, count)
+        all_hours = (
+            self.db.get_available_hours()
+        )  # Returns list of (date, hour_str, count)
 
         # Debug logging
-        print(f"[DEBUG] Navigation for: date={date_str}, hour={hour}, filename={csv_filename}")
+        print(
+            f"[DEBUG] Navigation for: date={date_str}, hour={hour}, filename={csv_filename}"
+        )
         print(f"[DEBUG] Available hours: {len(all_hours)} total")
         if all_hours:
             print(f"[DEBUG] First 3 hours: {all_hours[:3]}")
@@ -476,7 +515,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             if current_index > 0:
                 prev_date, prev_hour_str, _ = all_hours[current_index - 1]
                 prev_hour = int(prev_hour_str)
-                prev_filename = f"monitor_{prev_date.replace('-', '')}_{prev_hour:02d}.csv"
+                prev_filename = (
+                    f"monitor_{prev_date.replace('-', '')}_{prev_hour:02d}.csv"
+                )
                 prev_url = f"/view/{prev_date}/{prev_filename}"
                 print(f"[DEBUG] Prev URL: {prev_url}")
 
@@ -484,11 +525,15 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             if current_index < len(all_hours) - 1:
                 next_date, next_hour_str, _ = all_hours[current_index + 1]
                 next_hour = int(next_hour_str)
-                next_filename = f"monitor_{next_date.replace('-', '')}_{next_hour:02d}.csv"
+                next_filename = (
+                    f"monitor_{next_date.replace('-', '')}_{next_hour:02d}.csv"
+                )
                 next_url = f"/view/{next_date}/{next_filename}"
                 print(f"[DEBUG] Next URL: {next_url}")
         else:
-            print(f"[DEBUG] Current index not found! Looking for date={date_str}, hour={hour}")
+            print(
+                f"[DEBUG] Current index not found! Looking for date={date_str}, hour={hour}"
+            )
 
         return prev_url, next_url
 
@@ -500,8 +545,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         # Get navigation from database (not filesystem)
         prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
 
-        prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
-        next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
+        prev_btn_attr = (
+            "disabled"
+            if not prev_url
+            else f"onclick=\"window.location.href='{prev_url}'\""
+        )
+        next_btn_attr = (
+            "disabled"
+            if not next_url
+            else f"onclick=\"window.location.href='{next_url}'\""
+        )
 
         html = f"""<!DOCTYPE html>
 <html>
@@ -512,7 +565,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         html, body {{
             background-color: #1d2021 !important;
             margin: 0;
-            padding: 0;
+            padding: 40px 0 40px 0;
             min-height: 100vh;
             color: #ebdbb2;
             font-family: monospace;
@@ -908,8 +961,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         # Get navigation from database (not filesystem)
         prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
 
-        prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
-        next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
+        prev_btn_attr = (
+            "disabled"
+            if not prev_url
+            else f"onclick=\"window.location.href='{prev_url}'\""
+        )
+        next_btn_attr = (
+            "disabled"
+            if not next_url
+            else f"onclick=\"window.location.href='{next_url}'\""
+        )
 
         html = f"""<!DOCTYPE html>
 <html>
@@ -1278,7 +1339,9 @@ if __name__ == "__main__":
     db = NetworkMonitorDB(db_path)
 
     # Run HTTP server in separate thread
-    http_thread = threading.Thread(target=run_http_server, args=(logs_path, port), daemon=True)
+    http_thread = threading.Thread(
+        target=run_http_server, args=(logs_path, port), daemon=True
+    )
     http_thread.start()
 
     # Run WebSocket server in main event loop
