@@ -197,26 +197,8 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     print("[*] Serving Chart.js static (past hour)")
                     html_content = self._generate_chartjs_static(csv_file, date_str, csv_filename)
 
-                # Find all CSV files for navigation
-                all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
-                current_index = None
-                for i, f in enumerate(all_csv_files):
-                    if f == csv_file:
-                        current_index = i
-                        break
-
-                # Determine previous and next files
-                prev_url = None
-                next_url = None
-                if current_index is not None:
-                    if current_index > 0:
-                        prev_file = all_csv_files[current_index - 1]
-                        prev_date = prev_file.parent.parent.name
-                        prev_url = f"/view/{prev_date}/{prev_file.name}"
-                    if current_index < len(all_csv_files) - 1:
-                        next_file = all_csv_files[current_index + 1]
-                        next_date = next_file.parent.parent.name
-                        next_url = f"/view/{next_date}/{next_file.name}"
+                # Get navigation from database (not filesystem)
+                prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
 
                 # Inject Gruvbox background CSS and navigation buttons
                 gruvbox_css = """
@@ -461,31 +443,47 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         return html
 
+    def _get_navigation_urls(self, date_str, csv_filename):
+        """Get previous and next URLs from database available hours."""
+        # Extract hour from filename (monitor_20251103_23.csv -> 23)
+        hour_str = csv_filename.split('_')[-1].replace('.csv', '')
+        hour = int(hour_str)
+
+        # Get all available hours from database
+        all_hours = self.db.get_available_hours()  # Returns list of (date, hour, count)
+
+        # Find current position
+        current_index = None
+        for i, (db_date, db_hour, _) in enumerate(all_hours):
+            if db_date == date_str and db_hour == hour:
+                current_index = i
+                break
+
+        prev_url = None
+        next_url = None
+
+        if current_index is not None:
+            # Previous hour (lower index = more recent)
+            if current_index > 0:
+                prev_date, prev_hour, _ = all_hours[current_index - 1]
+                prev_filename = f"monitor_{prev_date.replace('-', '')}_{prev_hour:02d}.csv"
+                prev_url = f"/view/{prev_date}/{prev_filename}"
+
+            # Next hour (higher index = older)
+            if current_index < len(all_hours) - 1:
+                next_date, next_hour, _ = all_hours[current_index + 1]
+                next_filename = f"monitor_{next_date.replace('-', '')}_{next_hour:02d}.csv"
+                next_url = f"/view/{next_date}/{next_filename}"
+
+        return prev_url, next_url
+
     def _generate_chartjs_with_websocket(self, csv_file, date_str, csv_filename):
         """Generate Chart.js HTML with WebSocket support for current hour."""
         csv_url = f"/csv/{date_str}/{csv_filename}"
         ws_port = 8081  # WebSocket server port
 
-        # Find all CSV files for navigation
-        all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
-        current_index = None
-        for i, f in enumerate(all_csv_files):
-            if f == csv_file:
-                current_index = i
-                break
-
-        # Determine previous and next files
-        prev_url = None
-        next_url = None
-        if current_index is not None:
-            if current_index > 0:
-                prev_file = all_csv_files[current_index - 1]
-                prev_date = prev_file.parent.parent.name
-                prev_url = f"/view/{prev_date}/{prev_file.name}"
-            if current_index < len(all_csv_files) - 1:
-                next_file = all_csv_files[current_index + 1]
-                next_date = next_file.parent.parent.name
-                next_url = f"/view/{next_date}/{next_file.name}"
+        # Get navigation from database (not filesystem)
+        prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
 
         prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
         next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
