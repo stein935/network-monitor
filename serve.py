@@ -197,6 +197,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     # For past hours, check if HTML exists, if not generate it once
                     if not html_file.exists():
                         print("[*] Generating static visualization (past hour, first time)")
+
+                        # Create CSV file from database if it doesn't exist
+                        csv_file.parent.mkdir(parents=True, exist_ok=True)
+                        csv_content = self.db.export_to_csv(date_str, hour)
+
+                        with open(csv_file, 'w') as f:
+                            f.write(csv_content)
+
+                        print(f"[*] Created CSV file from database: {csv_file}")
+
                         script_dir = Path(__file__).parent
                         visualize_script = script_dir / "visualize.py"
 
