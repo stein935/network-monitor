@@ -434,9 +434,12 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             for date_str in sorted(files_by_date.keys(), reverse=True):
                 html += f'<h2>Date: {date_str}</h2>\n<div class="file-list">\n'
 
-                for filename, hour, count in sorted(
+                for filename, hour_str, count in sorted(
                     files_by_date[date_str], reverse=True
                 ):
+                    # Convert hour to int for formatting
+                    hour = int(hour_str)
+
                     # Format time display
                     formatted_time = f"{hour:02d}:00 - {hour:02d}:59"
 
