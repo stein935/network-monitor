@@ -29,8 +29,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Create necessary directories
 RUN mkdir -p logs static /var/log/nginx /var/lib/nginx /run
 
-# Expose nginx port
-EXPOSE 80
+# Expose nginx and WebSocket ports
+EXPOSE 8080 8081
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
