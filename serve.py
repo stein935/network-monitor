@@ -630,7 +630,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     <div id="ws-status" class="ws-status ws-disconnected">WebSocket: Connecting...</div>
 
     <div class="chart-title">Network Monitoring Dashboard (Live)</div>
-    <div class="chart-subtitle">{csv_filename}</div>
+    <div class="chart-subtitle">{date_str} {hour:02d}:00</div>
 
     <div class="chart-container">
         <canvas id="chart"></canvas>
@@ -1015,7 +1015,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 </head>
 <body>
     <div class="chart-title">Network Monitoring Dashboard</div>
-    <div class="chart-subtitle">{csv_filename}</div>
+    <div class="chart-subtitle">{date_str} {hour:02d}:00</div>
 
     <div class="chart-container">
         <canvas id="chart"></canvas>
