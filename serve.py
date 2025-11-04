@@ -187,57 +187,15 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 html_dir = self.logs_dir / date_str / "html"
                 html_file = html_dir / f"{csv_file.stem}_visualization.html"
 
-                # For current hour: use dynamic visualization with WebSocket support
-                # For past hours: generate once and cache
+                # Use Chart.js for all hours (current and past)
+                # Current hour: includes WebSocket for real-time updates
+                # Past hours: static Chart.js without WebSocket
                 if is_current_hour:
-                    # Serve dynamic HTML with Chart.js and WebSocket
-                    print("[*] Using dynamic Chart.js visualization with WebSocket (current hour)")
-                    html_content = self._generate_dynamic_chartjs_html(csv_file, date_str, csv_filename)
+                    print("[*] Serving Chart.js with WebSocket (current hour)")
+                    html_content = self._generate_chartjs_with_websocket(csv_file, date_str, csv_filename)
                 else:
-                    # For past hours, check if HTML exists, if not generate it once
-                    if not html_file.exists():
-                        print("[*] Generating static visualization (past hour, first time)")
-
-                        # Create CSV file from database if it doesn't exist
-                        csv_file.parent.mkdir(parents=True, exist_ok=True)
-                        csv_content = self.db.export_to_csv(date_str, hour)
-
-                        with open(csv_file, 'w') as f:
-                            f.write(csv_content)
-
-                        print(f"[*] Created CSV file from database: {csv_file}")
-
-                        script_dir = Path(__file__).parent
-                        visualize_script = script_dir / "visualize.py"
-
-                        # Check if running in Docker (use system python3) or native (use venv)
-                        if Path("/.dockerenv").exists():
-                            python_executable = "python3"
-                        else:
-                            venv_python = script_dir / "venv" / "bin" / "python"
-                            python_executable = str(venv_python)
-
-                        result = subprocess.run(
-                            [python_executable, str(visualize_script), str(csv_file)],
-                            capture_output=True,
-                            text=True,
-                        )
-
-                        if result.returncode != 0:
-                            self.send_error(
-                                500, f"Failed to generate visualization: {result.stderr}"
-                            )
-                            return
-                    else:
-                        print("[*] Using cached static visualization (past hour)")
-
-                    # Read the cached HTML file
-                    if not html_file.exists():
-                        self.send_error(404, "Visualization file not found")
-                        return
-
-                    with open(html_file, "r", encoding="utf-8") as f:
-                        html_content = f.read()
+                    print("[*] Serving Chart.js static (past hour)")
+                    html_content = self._generate_chartjs_static(csv_file, date_str, csv_filename)
 
                 # Find all CSV files for navigation
                 all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
@@ -503,14 +461,10 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         return html
 
-    def _generate_dynamic_chartjs_html(self, csv_file, date_str, csv_filename):
-        """Generate dynamic HTML with Chart.js and WebSocket support."""
+    def _generate_chartjs_with_websocket(self, csv_file, date_str, csv_filename):
+        """Generate Chart.js HTML with WebSocket support for current hour."""
         csv_url = f"/csv/{date_str}/{csv_filename}"
-
-        # Get WebSocket URL (same host, different port)
         ws_port = 8081  # WebSocket server port
-        # Note: This will be inserted as a JavaScript template literal
-        ws_url = f"ws://${{location.hostname}}:{ws_port}"
 
         # Find all CSV files for navigation
         all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
@@ -928,6 +882,325 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 startAutoUpdate();
             }}
         }});
+    </script>
+</body>
+</html>"""
+
+        return html
+
+    def _generate_chartjs_static(self, csv_file, date_str, csv_filename):
+        """Generate static Chart.js HTML for past hours (no WebSocket)."""
+        csv_url = f"/csv/{date_str}/{csv_filename}"
+
+        # Find all CSV files for navigation
+        all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
+        current_index = None
+        for i, f in enumerate(all_csv_files):
+            if f == csv_file:
+                current_index = i
+                break
+
+        # Determine previous and next files
+        prev_url = None
+        next_url = None
+        if current_index is not None:
+            if current_index > 0:
+                prev_file = all_csv_files[current_index - 1]
+                prev_date = prev_file.parent.parent.name
+                prev_url = f"/view/{prev_date}/{prev_file.name}"
+            if current_index < len(all_csv_files) - 1:
+                next_file = all_csv_files[current_index + 1]
+                next_date = next_file.parent.parent.name
+                next_url = f"/view/{next_date}/{next_file.name}"
+
+        prev_btn_attr = "disabled" if not prev_url else f'onclick="window.location.href=\'{prev_url}\'"'
+        next_btn_attr = "disabled" if not next_url else f'onclick="window.location.href=\'{next_url}\'"'
+
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Network Monitor - {csv_filename}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        html, body {{
+            background-color: #1d2021 !important;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            color: #ebdbb2;
+            font-family: monospace;
+        }}
+        .chart-container {{
+            position: relative;
+            width: 95%;
+            height: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #282828;
+            border-radius: 8px;
+        }}
+        .chart-title {{
+            text-align: center;
+            color: #fe8019;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }}
+        .chart-subtitle {{
+            text-align: center;
+            color: #ebdbb2;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }}
+        .nav-buttons {{
+            position: fixed;
+            top: 630px;
+            left: 40px;
+            z-index: 1000;
+        }}
+        .nav-buttons-right {{
+            position: fixed;
+            top: 630px;
+            right: 40px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }}
+        .nav-btn {{
+            background: #3c3836;
+            color: #ebdbb2;
+            border: 2px solid #665c54;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }}
+        .nav-btn:hover:not(:disabled) {{
+            background: #504945;
+            border-color: #fe8019;
+            color: #fe8019;
+        }}
+        .nav-btn:disabled {{
+            opacity: 0.3;
+            cursor: not-allowed;
+        }}
+    </style>
+</head>
+<body>
+    <div class="chart-title">Network Monitoring Dashboard</div>
+    <div class="chart-subtitle">{csv_filename}</div>
+
+    <div class="chart-container">
+        <canvas id="chart"></canvas>
+    </div>
+
+    <div class="nav-buttons">
+        <button class="nav-btn" onclick="window.location.href='/'" title="Back to index">← Home</button>
+    </div>
+    <div class="nav-buttons-right">
+        <button class="nav-btn" {prev_btn_attr} title="Previous file">← Prev</button>
+        <button class="nav-btn" {next_btn_attr} title="Next file">Next →</button>
+    </div>
+
+    <script>
+        const csvUrl = '{csv_url}';
+        let chart;
+
+        function parseCSV(csv) {{
+            const lines = csv.trim().split('\\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {{
+                const values = lines[i].split(',');
+                const row = {{}};
+                headers.forEach((header, index) => {{
+                    row[header] = values[index] ? values[index].trim() : null;
+                }});
+                data.push(row);
+            }}
+
+            return data;
+        }}
+
+        function updateChart() {{
+            fetch(csvUrl)
+                .then(response => response.text())
+                .then(csvText => {{
+                    const data = parseCSV(csvText);
+
+                    // Parse timestamps and values
+                    const timestamps = data.map(row => row.timestamp);
+                    const responseTimes = data.map(row => row.response_time === 'null' ? null : parseFloat(row.response_time));
+                    const successRates = data.map(row => {{
+                        const success = parseInt(row.success_count || 0);
+                        const total = parseInt(row.total_count || 1);
+                        return (success / total) * 100;
+                    }});
+
+                    // Color-code markers based on success rate
+                    const pointColors = successRates.map(rate => {{
+                        if (rate === 100) return '#b8bb26'; // green
+                        if (rate === 0) return '#fb4934';   // red
+                        return '#fe8019';                    // orange
+                    }});
+
+                    const chartData = {{
+                        labels: timestamps,
+                        datasets: [
+                            {{
+                                label: 'Response Time (ms)',
+                                data: responseTimes,
+                                borderColor: '#83a598',
+                                backgroundColor: 'rgba(131, 165, 152, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 3,
+                                pointHoverRadius: 5,
+                                yAxisID: 'y',
+                                tension: 0.1
+                            }},
+                            {{
+                                label: 'Success Rate (%)',
+                                data: successRates,
+                                borderColor: '#8ec07c',
+                                backgroundColor: 'rgba(142, 192, 124, 0.2)',
+                                borderWidth: 2,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                pointBackgroundColor: pointColors,
+                                pointBorderColor: pointColors,
+                                fill: true,
+                                yAxisID: 'y1',
+                                tension: 0.1
+                            }}
+                        ]
+                    }};
+
+                    const config = {{
+                        type: 'line',
+                        data: chartData,
+                        options: {{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {{
+                                mode: 'index',
+                                intersect: false,
+                            }},
+                            plugins: {{
+                                legend: {{
+                                    display: true,
+                                    position: 'bottom',
+                                    labels: {{
+                                        color: '#ebdbb2',
+                                        font: {{
+                                            family: 'monospace',
+                                            size: 12
+                                        }},
+                                        padding: 20
+                                    }}
+                                }},
+                                tooltip: {{
+                                    backgroundColor: '#3c3836',
+                                    titleColor: '#fe8019',
+                                    bodyColor: '#ebdbb2',
+                                    borderColor: '#665c54',
+                                    borderWidth: 1,
+                                    padding: 12,
+                                    displayColors: true
+                                }}
+                            }},
+                            scales: {{
+                                x: {{
+                                    display: true,
+                                    title: {{
+                                        display: true,
+                                        text: 'Time',
+                                        color: '#ebdbb2',
+                                        font: {{
+                                            family: 'monospace',
+                                            size: 14
+                                        }}
+                                    }},
+                                    ticks: {{
+                                        color: '#ebdbb2',
+                                        font: {{
+                                            family: 'monospace'
+                                        }},
+                                        maxRotation: 45,
+                                        minRotation: 45
+                                    }},
+                                    grid: {{
+                                        color: '#504945',
+                                        drawBorder: true
+                                    }}
+                                }},
+                                y: {{
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {{
+                                        display: true,
+                                        text: 'Response Time (ms)',
+                                        color: '#83a598',
+                                        font: {{
+                                            family: 'monospace',
+                                            size: 14
+                                        }}
+                                    }},
+                                    ticks: {{
+                                        color: '#ebdbb2',
+                                        font: {{
+                                            family: 'monospace'
+                                        }}
+                                    }},
+                                    grid: {{
+                                        color: '#504945',
+                                        drawBorder: true
+                                    }}
+                                }},
+                                y1: {{
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: {{
+                                        display: true,
+                                        text: 'Success Rate (%)',
+                                        color: '#8ec07c',
+                                        font: {{
+                                            family: 'monospace',
+                                            size: 14
+                                        }}
+                                    }},
+                                    min: 0,
+                                    max: 105,
+                                    ticks: {{
+                                        color: '#ebdbb2',
+                                        font: {{
+                                            family: 'monospace'
+                                        }}
+                                    }},
+                                    grid: {{
+                                        drawOnChartArea: false,
+                                        drawBorder: true,
+                                        color: '#504945'
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }};
+
+                    chart = new Chart(document.getElementById('chart'), config);
+                }})
+                .catch(error => {{
+                    console.error('Error loading chart:', error);
+                }});
+        }}
+
+        // Load chart on page load
+        updateChart();
     </script>
 </body>
 </html>"""
