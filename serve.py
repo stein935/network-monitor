@@ -452,6 +452,12 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         # Get all available hours from database
         all_hours = self.db.get_available_hours()  # Returns list of (date, hour_str, count)
 
+        # Debug logging
+        print(f"[DEBUG] Navigation for: date={date_str}, hour={hour}, filename={csv_filename}")
+        print(f"[DEBUG] Available hours: {len(all_hours)} total")
+        if all_hours:
+            print(f"[DEBUG] First 3 hours: {all_hours[:3]}")
+
         # Find current position
         current_index = None
         for i, (db_date, db_hour_str, _) in enumerate(all_hours):
@@ -459,6 +465,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             db_hour = int(db_hour_str)
             if db_date == date_str and db_hour == hour:
                 current_index = i
+                print(f"[DEBUG] Found current at index {i}")
                 break
 
         prev_url = None
@@ -471,6 +478,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 prev_hour = int(prev_hour_str)
                 prev_filename = f"monitor_{prev_date.replace('-', '')}_{prev_hour:02d}.csv"
                 prev_url = f"/view/{prev_date}/{prev_filename}"
+                print(f"[DEBUG] Prev URL: {prev_url}")
 
             # Next hour (higher index = older)
             if current_index < len(all_hours) - 1:
@@ -478,6 +486,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 next_hour = int(next_hour_str)
                 next_filename = f"monitor_{next_date.replace('-', '')}_{next_hour:02d}.csv"
                 next_url = f"/view/{next_date}/{next_filename}"
+                print(f"[DEBUG] Next URL: {next_url}")
+        else:
+            print(f"[DEBUG] Current index not found! Looking for date={date_str}, hour={hour}")
 
         return prev_url, next_url
 
