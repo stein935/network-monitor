@@ -4,26 +4,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Network Monitor is a bash-based daemon that continuously monitors network connectivity by pinging 8.8.8.8, logging response times and connection status to hourly CSV files. It includes Python-based web visualization tools with a Gruvbox-themed dashboard.
+Network Monitor is a Python-based daemon that continuously monitors network connectivity by pinging 8.8.8.8, storing data in SQLite database with real-time web visualization.
 
 **Key characteristics:**
 - **SQLite storage:** Fast, indexed database storage (Phase 1)
 - **Chart.js visualization:** 93% smaller bundle than Plotly (Phase 2)
 - **WebSocket real-time updates:** 30-second batches for current hour (Phase 2)
+- **nginx reverse proxy:** Gzip compression, better concurrency (Phase 3)
 - Daemon mode: Runs continuously without time limits
 - CSV export on-demand: Historical data exported dynamically from SQLite
 - Auto cleanup: Removes logs older than 10 days with VACUUM
-- Dual deployment: Runs natively on macOS/Linux or in Docker on Raspberry Pi Zero 2 W
+- Docker deployment: Optimized for Raspberry Pi Zero 2 W
 - **Performance improvements:**
   - 70% reduction in disk I/O (SQLite vs CSV)
   - 93% smaller page loads (Chart.js vs Plotly)
   - 95% CPU reduction for current hour monitoring (WebSocket vs polling)
+  - 70% bandwidth reduction (nginx gzip compression)
 
 ## Architecture
 
 ### Core Components
 
-1. **monitor.py** - SQLite-based monitor daemon (Phase 1 - recommended):
+1. **monitor.py** - SQLite-based monitor daemon (Phase 1):
    - Pings 8.8.8.8 every `FREQUENCY` seconds (default: 1)
    - Collects `SAMPLE_SIZE` samples (default: 5) before logging
    - Writes directly to SQLite: `logs/network_monitor.db`
@@ -31,58 +33,61 @@ Network Monitor is a bash-based daemon that continuously monitors network connec
    - Performs cleanup with VACUUM once per hour
    - Handles both macOS and Linux ping output formats
 
-   **Legacy:** `monitor.sh` still available for CSV-based logging
-
-2. **visualize.py** - Generates static HTML visualizations:
-   - Reads CSV and creates dual y-axis Plotly charts
-   - Response time (primary y-axis, left)
-   - Success rate percentage (secondary y-axis, right)
-   - Saves to `logs/YYYY-MM-DD/html/monitor_YYYYMMDD_HH_visualization.html`
-   - Gruvbox dark theme with color-coded markers
-
-3. **serve.py** - Live web server with SQLite backend, Chart.js, and WebSocket support (Phase 2):
+2. **serve.py** - Live web server with SQLite backend, Chart.js, and WebSocket support (Phase 2):
    - **HTTP server (port 8080):** Serves HTML and CSV exports
    - **WebSocket server (port 8081):** Real-time data pushes every 30 seconds
    - Reads from SQLite database (`db.py`)
    - Index page lists available hours from database with entry counts
-   - **Hybrid approach for optimal performance:**
-     - **Current hour**: Chart.js visualization with WebSocket updates (30s batches) + HTTP polling fallback (60s)
-     - **Past hours**: Static Plotly HTML generated once and cached forever
+   - **Chart.js for all visualizations:**
+     - **Current hour**: Chart.js with WebSocket updates (30s batches) + HTTP polling fallback (60s)
+     - **Past hours**: Static Chart.js visualizations (no updates)
    - Exports CSV on-demand via `/csv/YYYY-MM-DD/HH` endpoint
    - Navigation buttons (Back, Previous, Next)
    - Binds to 0.0.0.0 for network access
    - **Chart.js benefits:** 93% smaller (200KB vs 3MB Plotly), faster rendering, lower memory
 
-4. **db.py** - SQLite database handler:
+3. **db.py** - SQLite database handler:
    - Schema with indexed timestamps
    - Insert, query, export functions
    - Auto-cleanup with VACUUM
-   - Export to CSV format for visualization
+   - Export to CSV format for on-demand generation
+
+4. **nginx.conf** - Reverse proxy configuration (Phase 3):
+   - Listens on port 80
+   - Proxies HTTP requests to serve.py:8080
+   - Proxies WebSocket to serve.py:8081
+   - Gzip compression for 70% bandwidth reduction
+   - Security headers
+
+5. **start_services.sh** - Service startup script (Phase 3):
+   - Starts nginx reverse proxy
+   - Starts Python HTTP and WebSocket servers
+   - Handles graceful shutdown
 
 ### Data Flow
 
-**For current hour (live monitoring with Phase 2 optimizations):**
+**Architecture (Phase 3):**
 ```
-monitor.py (ping loop)
-    ↓
-SQLite database (logs/network_monitor.db)
-    ↓
-serve.py WebSocket server → broadcasts updates every 30s
-    ↓
-Browser Chart.js → receives WebSocket updates (30s batches)
-    ↓
-Fallback: HTTP polling if WebSocket fails (60s)
+Browser → nginx:80 (gzip, proxy)
+              ↓
+         serve.py:8080 (HTTP - Chart.js generation, CSV export)
+              ↓
+         serve.py:8081 (WebSocket - 30s batches)
+              ↓
+         SQLite database (logs/network_monitor.db)
+              ↑
+         monitor.py (writes every minute)
 ```
 
-**For past hours (historical viewing):**
+**Current hour (live monitoring):**
 ```
-SQLite database (logs/network_monitor.db)
-    ↓
-serve.py → exports CSV → visualize.py (called once)
-    ↓
-logs/YYYY-MM-DD/html/monitor_YYYYMMDD_HH_visualization.html (cached)
-    ↓
-serve.py → serves cached HTML
+monitor.py → SQLite → serve.py WebSocket → Browser Chart.js (30s updates)
+                                         → Fallback: HTTP polling (60s)
+```
+
+**Past hours (static viewing):**
+```
+SQLite → serve.py → generates Chart.js HTML → Browser
 ```
 
 ### SQLite Schema
@@ -109,47 +114,7 @@ timestamp, status, response_time, success_count, total_count, failed_count
 
 ## Development Commands
 
-### Native (macOS/Linux)
-
-**Setup virtual environment:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-deactivate
-```
-
-**Run monitor daemon (SQLite - recommended):**
-```bash
-python3 monitor.py [frequency] [sample_size]
-# Example: python3 monitor.py 1 60  # Check every 1s, log every 60 samples
-# Database: logs/network_monitor.db
-```
-
-**Run monitor daemon (Legacy CSV):**
-```bash
-./monitor.sh [frequency] [sample_size]
-```
-
-**Static visualization:**
-```bash
-./visualize.sh logs/2025-10-30/csv/monitor_20251030_16.csv
-```
-
-**Live web server:**
-```bash
-./serve.sh [logs_dir] [port]
-# Example: ./serve.sh logs 8080
-```
-
-**Stop processes:**
-```bash
-pkill -f monitor.py       # SQLite monitor
-pkill -f monitor.sh       # Legacy monitor
-pkill -f "python.*serve.py"
-```
-
-### Docker (Raspberry Pi deployment)
+### Docker (Production deployment)
 
 **Build and start container:**
 ```bash
@@ -157,52 +122,50 @@ docker compose build
 docker compose up -d
 ```
 
-**Start services inside container (SQLite):**
+**Start services inside container:**
 ```bash
+# Monitor daemon
 docker exec -d network-monitor python3 /app/monitor.py 1 60
-docker exec -d network-monitor python3 /app/serve.py /app/logs 80
-```
 
-**Legacy CSV mode:**
-```bash
-docker exec network-monitor /bin/bash -c "cd /app && ./monitor.sh 1 60"
+# Web server (nginx + Python servers)
+docker exec -d network-monitor /bin/bash /app/start_services.sh
 ```
 
 **Check status:**
 ```bash
 docker ps | grep network-monitor
 docker logs network-monitor
-docker exec network-monitor pgrep -f monitor.sh
-docker exec network-monitor ps aux
+docker exec network-monitor pgrep -f monitor.py
 docker stats network-monitor --no-stream
 ```
 
-**Stop processes inside container:**
+**Stop processes:**
 ```bash
-docker exec network-monitor pkill -f monitor.sh
+docker exec network-monitor pkill -f monitor.py
+docker exec network-monitor nginx -s quit
 docker exec network-monitor pkill -f serve.py
-# Or restart entire container: docker compose restart
 ```
-
-**Access web dashboard:**
-- Local Pi: `http://localhost:8080`
-- Network: `http://<pi-ip>:8080`
 
 **Update deployment:**
 ```bash
 git pull origin main
 docker compose down
-docker compose build
+docker compose build --no-cache
 docker compose up -d
 ```
+
+**Access web dashboard:**
+- External: `http://<pi-ip>:8080`
+- Inside container: `http://localhost:80` (nginx)
+
 
 ## Systemd Services (Raspberry Pi)
 
 Three systemd services manage the Docker deployment:
 
 1. `network-monitor-container.service` - Starts/stops Docker container
-2. `network-monitor-daemon.service` - Runs monitor.sh inside container
-3. `network-monitor-server.service` - Runs serve.sh inside container
+2. `network-monitor-daemon.service` - Runs monitor.py inside container
+3. `network-monitor-server.service` - Runs start_services.sh (nginx + serve.py) inside container
 
 **Check status:**
 ```bash
@@ -229,47 +192,28 @@ sudo journalctl -u network-monitor-server.service -f
 Edit systemd service files or pass as arguments:
 
 - `FREQUENCY`: Seconds between pings (default: 1)
-- `SAMPLE_SIZE`: Number of pings to average before logging (default: 5)
-- `LOG_RETENTION_DAYS`: Days to keep logs (default: 10, set in monitor.sh line 6)
+- `SAMPLE_SIZE`: Number of pings to average before logging (default: 60)
+- `LOG_RETENTION_DAYS`: Days to keep logs (default: 10, set in monitor.py)
 
 ### Port Mapping
 
 Edit `docker-compose.yml` to change exposed port:
 ```yaml
 ports:
-  - "8080:80"  # External:Internal
-```
-
-### Server Port (Native)
-
-Pass as second argument to serve.sh:
-```bash
-./serve.sh logs 8080
+  - "8080:80"  # External:Internal (nginx listens on port 80 inside container)
 ```
 
 ## Important Implementation Details
 
 ### Cross-Platform Ping Parsing
 
-monitor.sh handles both macOS and Linux ping output formats:
-```bash
+monitor.py handles both macOS and Linux ping output formats:
+```python
 # macOS: "round-trip min/avg/max/stddev = 14.123/15.456/16.789/1.234 ms"
 # Linux: "rtt min/avg/max/mdev = 14.123/15.456/16.789/1.234 ms"
-RESPONSE_TIME=$(echo "$PING_RESULT" | grep -oE '(round-trip|rtt) [^=]*= [0-9]+\.[0-9]+/[0-9]+\.[0-9]+' | grep -oE '/[0-9]+\.[0-9]+' | head -1 | sed 's/\///')
-```
-
-### Hourly File Rollover
-
-monitor.sh checks on each log write if the hour has changed:
-```bash
-CURRENT_LOG_FILE=$(get_log_file)
-if [ "$CURRENT_LOG_FILE" != "$LOG_FILE" ]; then
-    LOG_FILE="$CURRENT_LOG_FILE"
-    # Create header if new file
-    if [ ! -f "$LOG_FILE" ]; then
-        echo "timestamp, status, response_time, success_count, total_count, failed_count" >"$LOG_FILE"
-    fi
-fi
+match = re.search(r'(round-trip|rtt)[^=]*=\s*[\d.]+/([\d.]+)', result.stdout)
+if match:
+    return float(match.group(2))
 ```
 
 ### Docker Privileges
@@ -282,19 +226,9 @@ cap_add:
   - NET_ADMIN
 ```
 
-### serve.py Navigation Logic
+### Chart.js Visualization Approach
 
-serve.py finds all CSV files and determines prev/next URLs:
-```python
-all_csv_files = sorted(self.logs_dir.rglob("*/csv/*.csv"))
-current_index = # find index of current file
-prev_url = f"/view/{prev_date}/{prev_file.name}"  # if exists
-next_url = f"/view/{next_date}/{next_file.name}"  # if exists
-```
-
-### Hybrid Visualization Optimization
-
-serve.py implements a hybrid approach for optimal performance on resource-constrained devices:
+serve.py uses Chart.js for all visualizations with different behavior for current vs past hours:
 
 **Current hour detection:**
 ```python
@@ -304,70 +238,48 @@ current_hour_str = now.strftime("%Y%m%d_%H")
 is_current_hour = (date_str == current_date_str and current_hour_str in csv_filename)
 ```
 
-**Dynamic visualization (current hour):**
-- Browser fetches CSV directly via `/csv/` endpoint
-- JavaScript parses CSV and updates Plotly chart
-- Updates every 60 seconds without page reload
+**Current hour (live updates):**
+- Chart.js with WebSocket connection (30s batches)
+- Falls back to HTTP polling if WebSocket fails (60s)
 - Shows "🔴 LIVE" indicator
-- Zero Python/Plotly overhead per update (~KB CSV vs ~MB HTML)
+- JavaScript template literals for dynamic URLs
 
-**Static visualization (past hours):**
-- HTML generated once on first access
-- Cached forever (past hours never change)
-- Subsequent views serve from cache
-- Massive CPU/disk I/O savings
+**Past hours (static):**
+- Chart.js without WebSocket
+- No auto-refresh (data is historical)
+- Faster rendering, lower memory
 
-**Performance impact:**
-- Current hour: ~90% reduction in CPU usage (no HTML regeneration)
-- Past hours: ~100% reduction after first generation (pure cache)
-- Ideal for Pi Zero 2 W with limited resources
+### WebSocket Implementation
 
-### Auto-Refresh Implementation
-
-JavaScript pauses refresh when tab is hidden:
+JavaScript establishes WebSocket connection with runtime URL:
 ```javascript
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        stopAutoRefresh();
-    } else {
-        startAutoRefresh();
-    }
-});
+const wsUrl = `ws://${location.hostname}:8081`;
+const ws = new WebSocket(wsUrl);
+
+// Fallback to HTTP polling on error
+ws.onerror = () => {
+    setInterval(() => fetchData(), 60000);
+};
 ```
 
 ## Troubleshooting
 
-### Docker environment detection
+### nginx Reverse Proxy
 
-Shell scripts (serve.sh, visualize.sh) and serve.py detect Docker by checking for `/.dockerenv`:
-```bash
-# In shell scripts
-if [ -f "/.dockerenv" ]; then
-    python3 "$SCRIPT_DIR/serve.py" "$@"  # Use system python3
-else
-    source "$SCRIPT_DIR/venv/bin/activate"  # Use venv
-fi
-```
+nginx.conf configures gzip compression and WebSocket upgrade:
+```nginx
+# Gzip for 70% bandwidth reduction
+gzip on;
+gzip_comp_level 6;
+gzip_types text/plain text/css text/xml text/javascript application/json application/javascript;
 
-```python
-# In serve.py
-if Path("/.dockerenv").exists():
-    python_executable = "python3"  # System packages
-else:
-    python_executable = str(venv_python)  # Venv
-```
-
-This allows the same scripts to work in both Docker (system packages) and native (venv) environments.
-
-### Venv not activating in shell scripts
-
-The wrapper scripts (serve.sh, visualize.sh) automatically create and use venv in native environments:
-```bash
-if [ ! -d "$VENV_DIR" ]; then
-    python3 -m venv "$VENV_DIR"
-    source "$VENV_DIR/bin/activate"
-    pip install -r requirements.txt
-fi
+# WebSocket upgrade
+location /ws {
+    proxy_pass http://127.0.0.1:8081;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
 ```
 
 ### Docker on ARM (Raspberry Pi)
@@ -415,35 +327,35 @@ pkill -f "python.*serve.py"
 
 ## Dependencies
 
-**System:**
-- bash
+**System packages (installed in Docker):**
+- python3, python3-pip
 - bc (for calculations)
-- ping (iputils-ping on Linux)
-- Python 3.7+
-
-**Python packages (requirements.txt):**
-- pandas==2.0.3
-- plotly==5.17.0
+- ping (iputils-ping)
+- nginx
+- python3-pandas
+- python3-plotly
+- python3-numpy
+- python3-websockets
 
 ## File Structure
 
 ```
 network-monitor/
-├── monitor.sh              # Main daemon script
-├── serve.sh                # Web server wrapper
-├── visualize.sh            # Visualization wrapper
-├── serve.py                # Python web server
-├── visualize.py            # Python visualization generator
-├── requirements.txt        # Python dependencies
+├── monitor.py              # SQLite-based monitor daemon
+├── serve.py                # Python web server (HTTP + WebSocket)
+├── db.py                   # SQLite database handler
+├── nginx.conf              # nginx reverse proxy config
+├── start_services.sh       # Service startup script
+├── generate_static.sh      # Nightly pre-generation (future)
 ├── Dockerfile              # Docker image definition
 ├── docker-compose.yml      # Docker container config
 ├── README.md               # User documentation
 ├── DEPLOYMENT.md           # Raspberry Pi deployment guide
-├── venv/                   # Python virtual environment (auto-created)
+├── OPTIMIZATION.md         # Performance optimization details
+├── CLAUDE.md               # This file
 └── logs/
-    └── YYYY-MM-DD/         # Daily log directory
-        ├── csv/            # CSV data files
-        │   └── monitor_YYYYMMDD_HH.csv
-        └── html/           # Generated visualizations
-            └── monitor_YYYYMMDD_HH_visualization.html
+    ├── network_monitor.db  # SQLite database
+    └── YYYY-MM-DD/         # Daily directories (CSV exports only)
+        └── csv/            # CSV exports (on-demand)
+            └── monitor_YYYYMMDD_HH.csv
 ```

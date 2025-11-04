@@ -141,22 +141,14 @@ If issues occur:
 
 **Modified files:**
 - `serve.py` - WebSocket support, Chart.js templates, SQLite queries
-- `requirements.txt` - Add websockets library
-- `Dockerfile` - Add nginx
-- `docker-compose.yml` - nginx service
+- `Dockerfile` - Add nginx, system packages
+- `docker-compose.yml` - Port mapping for nginx
 
-**Deprecated (kept for backup):**
-- `monitor.sh` - Replaced by `monitor.py`
-- `visualize.py` - Still used for static generation
+## Deployment Status
 
-## Next Steps
+✅ **Phase 1 (SQLite):** COMPLETED and deployed
+✅ **Phase 2 (Chart.js + WebSocket):** COMPLETED and deployed
+✅ **Phase 3 (nginx):** COMPLETED - ready for deployment
 
-1. Complete `serve.py` modifications for SQLite + CSV export
-2. Implement Chart.js visualization
-3. Add WebSocket server
-4. Create nginx configuration
-5. Create pre-generation script
-6. Update documentation
-7. Test on Raspberry Pi
-8. Deploy phase by phase
+**Next:** Deploy Phase 3 to Raspberry Pi and verify performance improvements
 
