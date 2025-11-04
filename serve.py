@@ -121,12 +121,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
                 # Parse date and hour from path
                 if "/" not in csv_path:
-                    self.send_error(400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH")
+                    self.send_error(
+                        400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH"
+                    )
                     return
 
                 parts = csv_path.split("/")
                 if len(parts) < 2:
-                    self.send_error(400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH")
+                    self.send_error(
+                        400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH"
+                    )
                     return
 
                 date_str = parts[0]  # YYYY-MM-DD
@@ -165,7 +169,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 # Extract the path components
                 parts = self.path[6:].split("/")  # Remove /view/ prefix
                 if len(parts) < 2:
-                    self.send_error(400, "Invalid path format. Expected: /view/YYYY-MM-DD/HH")
+                    self.send_error(
+                        400, "Invalid path format. Expected: /view/YYYY-MM-DD/HH"
+                    )
                     return
 
                 date_str = parts[0]  # YYYY-MM-DD
@@ -181,13 +187,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 now = datetime.now()
                 current_date_str = now.strftime("%Y-%m-%d")
                 current_hour = now.hour
-                is_current_hour = (date_str == current_date_str and hour == current_hour)
+                is_current_hour = date_str == current_date_str and hour == current_hour
 
                 print(
                     f"\n[*] Serving visualization for: {date_str} hour {hour} (current_hour={is_current_hour})"
                 )
 
-                                # Use Chart.js for all hours (current and past)
+                # Use Chart.js for all hours (current and past)
                 # Current hour: includes WebSocket for real-time updates
                 # Past hours: static Chart.js without WebSocket
                 if is_current_hour:
@@ -466,9 +472,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         )  # Returns list of (date, hour_str, count)
 
         # Debug logging
-        print(
-            f"[DEBUG] Navigation for: date={date_str}, hour={hour}"
-        )
+        print(f"[DEBUG] Navigation for: date={date_str}, hour={hour}")
         print(f"[DEBUG] Available hours: {len(all_hours)} total")
         if all_hours:
             print(f"[DEBUG] First 3 hours: {all_hours[:3]}")
@@ -529,7 +533,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Network Monitor - {date_str} {hour:02d}:00 (Live)</title>
+    <title>Network Monitor - {date_str} {hour:02d}:00 (Live⚡️)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         html, body {{
@@ -555,7 +559,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             font-size: 20px;
             font-weight: bold;
             margin-bottom: 10px;
-            padding: 40px 0 0 0;
+            padding: 0;
         }}
         .chart-subtitle {{
             text-align: center;
@@ -632,7 +636,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     <div class="live-indicator">🔴 LIVE</div>
     <div id="ws-status" class="ws-status ws-disconnected">WebSocket: Connecting...</div>
 
-    <div class="chart-title">Network Monitoring Dashboard (Live)</div>
+    <div class="chart-title">Network Monitoring Dashboard (Live⚡️)</div>
     <div class="chart-subtitle">{date_str} {hour:02d}:00</div>
 
     <div class="chart-container">
