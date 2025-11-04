@@ -231,11 +231,16 @@ function updateChartWithData(csv) {
         return;
     }
 
-    // Extract timestamps (HH:MM:SS only)
+    // Extract timestamps (HH:MM format)
     const timestamps = data.map(row => {
         const ts = row.timestamp || '';
         const parts = ts.split(' ');
-        return parts.length > 1 ? parts[1] : ts;
+        if (parts.length > 1) {
+            // Extract time portion (HH:MM:SS) and remove seconds
+            const timeParts = parts[1].split(':');
+            return `${timeParts[0]}:${timeParts[1]}`; // HH:MM only
+        }
+        return ts;
     });
 
     // Extract response times (handle nulls)
