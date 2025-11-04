@@ -1,4 +1,4 @@
-.PHONY: help dev build start stop restart logs shell test clean deploy status
+.PHONY: help dev build start stop restart logs shell test clean deploy rebuild-prod update-prod status
 
 # Default target
 help:
@@ -17,9 +17,13 @@ help:
 	@echo "  make status       - Check status of all services"
 	@echo "  make test         - Test HTTP endpoints"
 	@echo ""
+	@echo "Deployment:"
+	@echo "  make deploy       - Deploy to Raspberry Pi (via GitHub)"
+	@echo "  make rebuild-prod - Full rebuild (use on Pi after git pull)"
+	@echo "  make update-prod  - Quick update (on Pi, no rebuild)"
+	@echo ""
 	@echo "Utilities:"
 	@echo "  make clean        - Remove container, image, and logs"
-	@echo "  make deploy       - Deploy to Raspberry Pi"
 
 # Quick development: copy code and restart
 dev:
@@ -129,12 +133,49 @@ clean:
 	@echo "⚠️  Delete logs? (y/N): " && read ans && [ $${ans:-N} = y ] && rm -rf logs/* || true
 	@echo "✅ Cleanup complete!"
 
-# Deploy to Raspberry Pi
+# Deploy to Raspberry Pi (automated if PI_HOST is set)
 deploy:
 	@echo "🚀 Deploying to Raspberry Pi..."
 	@echo "📤 Pushing to GitHub..."
 	git push origin main
-	@echo "📥 Run on Pi:"
-	@echo "  cd ~/network-monitor"
-	@echo "  git pull origin main"
-	@echo "  sudo systemctl restart network-monitor-server.service"
+ifdef PI_HOST
+	@echo "📥 Deploying to $(PI_HOST)..."
+	ssh $(PI_HOST) 'cd ~/network-monitor && git pull origin main && make rebuild-prod'
+	@echo "✅ Deployment complete!"
+	@echo "🌐 Visit http://$(PI_HOST):8080"
+else
+	@echo ""
+	@echo "📥 Manual deployment steps:"
+	@echo "  1. SSH to your Raspberry Pi"
+	@echo "  2. cd ~/network-monitor"
+	@echo "  3. git pull origin main"
+	@echo "  4. make rebuild-prod"
+	@echo ""
+	@echo "Or set PI_HOST environment variable for automated deployment:"
+	@echo "  export PI_HOST=pi@192.168.1.100"
+	@echo "  make deploy"
+endif
+
+# Full rebuild for production (use on Pi after pull)
+rebuild-prod:
+	@echo "🏗️  Rebuilding for production..."
+	docker compose down || true
+	docker compose build --no-cache
+	docker compose up -d
+	@sleep 5
+	@echo "📊 Starting monitor..."
+	docker exec -d network-monitor python3 /app/monitor.py 1 60
+	@echo "⏳ Waiting 30 seconds for initial data..."
+	@sleep 30
+	@echo "🌐 Starting web services..."
+	docker exec -d network-monitor /bin/bash /app/start_services.sh
+	@sleep 3
+	@echo "✅ Production deployment complete!"
+	@make status
+
+# Quick update for production (faster, no rebuild)
+update-prod:
+	@echo "⚡ Quick production update..."
+	git pull origin main
+	@make dev
+	@echo "✅ Production updated!"
