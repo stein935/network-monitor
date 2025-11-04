@@ -153,7 +153,7 @@ sudo nano /etc/systemd/system/network-monitor-server.service
 
 ```ini
 [Unit]
-Description=Network Monitor Web Server (Docker - Chart.js + WebSocket)
+Description=Network Monitor Web Server (Docker - nginx + Chart.js + WebSocket)
 After=docker.service network-monitor-container.service
 Requires=docker.service network-monitor-container.service
 
@@ -161,14 +161,21 @@ Requires=docker.service network-monitor-container.service
 Type=simple
 Restart=always
 RestartSec=10
-ExecStart=/usr/bin/docker exec network-monitor python3 /app/serve.py logs 8080
-ExecStop=/usr/bin/docker exec network-monitor pkill -f serve.py
+ExecStart=/usr/bin/docker exec network-monitor /bin/bash /app/start_services.sh
+ExecStop=/usr/bin/docker exec network-monitor /bin/bash -c "nginx -s quit; pkill -f serve.py"
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-**What it does**: Runs web server with Chart.js visualization and WebSocket real-time updates on ports 8080 (HTTP) and 8081 (WebSocket).
+**What it does**: Runs nginx reverse proxy (port 80), Python HTTP server (port 8080), and WebSocket server (port 8081).
+
+**Phase 3 nginx benefits**:
+- Gzip compression (reduces bandwidth)
+- Better static file serving
+- Lower memory usage than Python-only
+- Easier to add SSL/authentication later
+- Better concurrency handling
 
 ### 3. Create Container Startup Service
 
@@ -454,34 +461,44 @@ bash check_status.sh
 
 1. **Docker Container** (`network-monitor`)
    - Debian bookworm base with Python 3.11
-   - System packages: pandas, plotly, websockets
-   - Ports: 8080 (HTTP), 8081 (WebSocket)
+   - System packages: pandas, plotly, websockets, nginx
+   - Ports: 80 (nginx), 8080 (HTTP), 8081 (WebSocket)
 
-2. **Monitor Daemon** (`monitor.py`)
+2. **nginx Reverse Proxy** (Phase 3)
+   - Listens on port 80
+   - Proxies requests to Python server (8080) and WebSocket (8081)
+   - Gzip compression enabled
+   - Static file caching
+   - WebSocket upgrade support
+
+3. **Monitor Daemon** (`monitor.py`)
    - Pings 8.8.8.8 every second
    - Collects 60 samples (1 minute of data)
    - Writes to SQLite: `logs/network_monitor.db`
    - Auto-cleanup: removes data older than 10 days
 
-3. **Web Server** (`serve.py`)
-   - HTTP server on port 8080
-   - WebSocket server on port 8081
-   - Current hour: Chart.js with WebSocket updates (30s batches)
-   - Past hours: Cached Plotly visualizations
+4. **Web Server** (`serve.py`)
+   - HTTP server on port 8080 (internal)
+   - WebSocket server on port 8081 (internal)
+   - All hours: Chart.js visualizations (Phase 2)
+   - Current hour: WebSocket updates (30s batches)
+   - Past hours: Static Chart.js (no updates)
    - Gruvbox dark theme
 
 **Data Flow:**
 ```
-monitor.py → SQLite DB → serve.py → Browser
-                          ↓
-                    WebSocket (30s updates)
+Browser → nginx:80 → serve.py:8080 → SQLite DB
+                  ↓
+                WebSocket:8081 (30s updates)
+                  ↑
+           monitor.py (writes to SQLite)
 ```
 
 **Performance Optimizations:**
-- SQLite: 70% reduction in disk I/O vs CSV files
-- Chart.js: 93% smaller page loads (200KB vs 3MB Plotly)
-- WebSocket: 95% CPU reduction vs HTTP polling
-- Hybrid caching: Current hour dynamic, past hours cached
+- **Phase 1 - SQLite**: 70% reduction in disk I/O vs CSV files
+- **Phase 2 - Chart.js**: 93% smaller page loads (200KB vs 3MB Plotly)
+- **Phase 2 - WebSocket**: 95% CPU reduction vs HTTP polling
+- **Phase 3 - nginx**: Gzip compression, better concurrency, lower memory
 
 ---
 

@@ -56,32 +56,27 @@ This document describes the comprehensive optimization being implemented to dram
 - Falls back to HTTP polling if WebSocket unavailable
 
 ### 4. nginx Reverse Proxy
-**Status:** Planned
+**Status:** ✅ COMPLETED (Phase 3)
 
 **Benefits:**
-- Handles static files (cached HTML) efficiently
-- Lower memory than Python HTTP server
-- Better concurrency
-- Can add SSL/authentication easily
+- Gzip compression (reduces bandwidth by ~70%)
+- Better static file serving
+- Lower memory than Python-only HTTP server
+- Better concurrency handling
+- Easy to add SSL/authentication later
+- Proper WebSocket upgrade support
+
+**Implementation:**
+- nginx listens on port 80
+- Proxies to Python HTTP server on 8080
+- Proxies WebSocket to port 8081
+- Gzip compression enabled for all text content
+- Security headers added (X-Frame-Options, etc.)
 
 **Architecture:**
 ```
-Client → nginx:8080 → Python WebSocket:8081 (dynamic)
-                   → Static files (cached HTML)
-```
-
-### 5. Nightly Pre-Generation
-**Status:** Planned
-**Schedule:** 3:00 AM daily
-
-**Benefits:**
-- All past hours have HTML ready
-- Zero delay on first visit
-- Can be done during low-usage time
-
-**Cron Job:**
-```bash
-0 3 * * * /home/kirk/network-monitor/generate_static.sh
+Browser → nginx:80 → Python HTTP:8080 (Chart.js generation)
+                  → Python WebSocket:8081 (real-time updates)
 ```
 
 ## Performance Impact Summary
