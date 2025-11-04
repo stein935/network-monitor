@@ -450,11 +450,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         hour = int(hour_str)
 
         # Get all available hours from database
-        all_hours = self.db.get_available_hours()  # Returns list of (date, hour, count)
+        all_hours = self.db.get_available_hours()  # Returns list of (date, hour_str, count)
 
         # Find current position
         current_index = None
-        for i, (db_date, db_hour, _) in enumerate(all_hours):
+        for i, (db_date, db_hour_str, _) in enumerate(all_hours):
+            # db_hour_str is a string like '23', convert to int for comparison
+            db_hour = int(db_hour_str)
             if db_date == date_str and db_hour == hour:
                 current_index = i
                 break
@@ -465,13 +467,15 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         if current_index is not None:
             # Previous hour (lower index = more recent)
             if current_index > 0:
-                prev_date, prev_hour, _ = all_hours[current_index - 1]
+                prev_date, prev_hour_str, _ = all_hours[current_index - 1]
+                prev_hour = int(prev_hour_str)
                 prev_filename = f"monitor_{prev_date.replace('-', '')}_{prev_hour:02d}.csv"
                 prev_url = f"/view/{prev_date}/{prev_filename}"
 
             # Next hour (higher index = older)
             if current_index < len(all_hours) - 1:
-                next_date, next_hour, _ = all_hours[current_index + 1]
+                next_date, next_hour_str, _ = all_hours[current_index + 1]
+                next_hour = int(next_hour_str)
                 next_filename = f"monitor_{next_date.replace('-', '')}_{next_hour:02d}.csv"
                 next_url = f"/view/{next_date}/{next_filename}"
 
