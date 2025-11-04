@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:80"   # nginx reverse proxy (Phase 3)
+      - "8081:8081" # WebSocket server (Phase 2)
     volumes:
       - ./logs:/app/logs
     network_mode: bridge
