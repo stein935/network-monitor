@@ -385,19 +385,19 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         next_url = None
 
         if current_index is not None:
-            # Previous hour (lower index = more recent)
-            if current_index > 0:
-                prev_date, prev_hour_str, _ = all_hours[current_index - 1]
+            # Previous hour (higher index = older, going back in time)
+            if current_index < len(all_hours) - 1:
+                prev_date, prev_hour_str, _ = all_hours[current_index + 1]
                 prev_hour = int(prev_hour_str)
                 prev_url = f"/view/{prev_date}/{prev_hour}"
-                print(f"[DEBUG] Prev URL: {prev_url}")
+                print(f"[DEBUG] Prev URL: {prev_url} (older)")
 
-            # Next hour (higher index = older)
-            if current_index < len(all_hours) - 1:
-                next_date, next_hour_str, _ = all_hours[current_index + 1]
+            # Next hour (lower index = more recent, going forward in time)
+            if current_index > 0:
+                next_date, next_hour_str, _ = all_hours[current_index - 1]
                 next_hour = int(next_hour_str)
                 next_url = f"/view/{next_date}/{next_hour}"
-                print(f"[DEBUG] Next URL: {next_url}")
+                print(f"[DEBUG] Next URL: {next_url} (newer)")
         else:
             print(
                 f"[DEBUG] Current index not found! Looking for date={date_str}, hour={hour}"

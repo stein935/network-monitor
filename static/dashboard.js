@@ -473,9 +473,9 @@ function updateNavigationButtons() {
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
 
-    // Previous button (index - 1)
-    if (activeIndex > 0) {
-        const prevItem = dataItems[activeIndex - 1];
+    // Previous button (index + 1, older data - going back in time)
+    if (activeIndex < dataItems.length - 1) {
+        const prevItem = dataItems[activeIndex + 1];
         const prevDate = prevItem.getAttribute('data-date');
         const prevHour = prevItem.getAttribute('data-hour');
         prevBtn.disabled = false;
@@ -485,9 +485,9 @@ function updateNavigationButtons() {
         prevBtn.setAttribute('data-url', '');
     }
 
-    // Next button (index + 1)
-    if (activeIndex < dataItems.length - 1) {
-        const nextItem = dataItems[activeIndex + 1];
+    // Next button (index - 1, newer data - going forward in time)
+    if (activeIndex > 0) {
+        const nextItem = dataItems[activeIndex - 1];
         const nextDate = nextItem.getAttribute('data-date');
         const nextHour = nextItem.getAttribute('data-hour');
         nextBtn.disabled = false;
