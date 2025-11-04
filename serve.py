@@ -184,8 +184,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 is_current_hour = (date_str == current_date_str and hour == current_hour)
 
                 print(
-                    f"
-[*] Serving visualization for: {date_str} hour {hour} (current_hour={is_current_hour})"
+                    f"\n[*] Serving visualization for: {date_str} hour {hour} (current_hour={is_current_hour})"
                 )
 
                                 # Use Chart.js for all hours (current and past)
@@ -193,14 +192,10 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 # Past hours: static Chart.js without WebSocket
                 if is_current_hour:
                     print("[*] Serving Chart.js with WebSocket (current hour)")
-                    html_content = self._generate_chartjs_with_websocket(
-                        csv_file, date_str, csv_filename
-                    )
+                    html_content = self._generate_chartjs_with_websocket(date_str, hour)
                 else:
                     print("[*] Serving Chart.js static (past hour)")
-                    html_content = self._generate_chartjs_static(
-                        csv_file, date_str, csv_filename
-                    )
+                    html_content = self._generate_chartjs_static(date_str, hour)
 
                 # Get navigation from database (not filesystem)
                 prev_url, next_url = self._get_navigation_urls(date_str, hour)
