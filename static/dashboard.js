@@ -294,10 +294,13 @@ function loadDataItem(date, hour, element) {
     const filename = `monitor_${dateFormatted}_${String(hour).padStart(2, '0')}.csv`;
     document.querySelector('.file-name').textContent = filename;
 
-    // Check if this is current hour
+    // Check if this is current hour (database uses UTC)
     const now = new Date();
-    const currentDateStr = now.toISOString().split('T')[0];
-    const currentHourNum = now.getHours();
+    const year = now.getUTCFullYear();
+    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(now.getUTCDate()).padStart(2, '0');
+    const currentDateStr = `${year}-${month}-${day}`;
+    const currentHourNum = now.getUTCHours();
     const wasCurrentHour = isCurrentHour;
     isCurrentHour = (date === currentDateStr && parseInt(hour) === currentHourNum);
 
@@ -329,6 +332,9 @@ function loadDataItem(date, hour, element) {
 // WebSocket connection
 function connectWebSocket() {
     if (ws) return; // Already connected
+
+    // Stop polling if it's running (we're switching to WebSocket)
+    stopPolling();
 
     const wsUrl = `ws://${location.hostname}:8081`;
     updateWebSocketStatus('connecting');
