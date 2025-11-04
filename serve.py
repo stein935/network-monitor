@@ -116,29 +116,21 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/csv/"):
             # Export CSV from SQLite for dynamic visualization
             try:
-                # Path format: /csv/YYYY-MM-DD/HH or /csv/YYYY-MM-DD/monitor_YYYYMMDD_HH.csv
+                # Path format: /csv/YYYY-MM-DD/HH
                 csv_path = urllib.parse.unquote(self.path[5:])  # Remove /csv/ prefix
 
                 # Parse date and hour from path
-                if "/" in csv_path:
-                    parts = csv_path.split("/")
-                    date_str = parts[0]  # YYYY-MM-DD
-
-                    # Extract hour from filename or second part
-                    if len(parts) > 1:
-                        if parts[1].endswith(".csv"):
-                            # Format: monitor_YYYYMMDD_HH.csv
-                            hour_str = parts[1].split("_")[-1].replace(".csv", "")
-                            hour = int(hour_str)
-                        else:
-                            # Format: HH
-                            hour = int(parts[1])
-                    else:
-                        self.send_error(400, "Invalid CSV path format")
-                        return
-                else:
-                    self.send_error(400, "Invalid CSV path format")
+                if "/" not in csv_path:
+                    self.send_error(400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH")
                     return
+
+                parts = csv_path.split("/")
+                if len(parts) < 2:
+                    self.send_error(400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH")
+                    return
+
+                date_str = parts[0]  # YYYY-MM-DD
+                hour = int(parts[1])  # HH (0-23)
 
                 # Export from database
                 csv_content = self.db.export_to_csv(date_str, hour)
@@ -168,20 +160,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         elif self.path.startswith("/view/"):
             # Serve specific visualization
-            # Path format: /view/YYYY-MM-DD/monitor_YYYYMMDD_HHMMSS.csv
+            # Path format: /view/YYYY-MM-DD/HH
             try:
                 # Extract the path components
                 parts = self.path[6:].split("/")  # Remove /view/ prefix
                 if len(parts) < 2:
-                    self.send_error(400, "Invalid path format")
+                    self.send_error(400, "Invalid path format. Expected: /view/YYYY-MM-DD/HH")
                     return
 
-                date_str = parts[0]
-                csv_filename = "/".join(parts[1:])
-
-                # Extract hour from filename (format: monitor_YYYYMMDD_HH.csv)
-                hour_str = csv_filename.split("_")[-1].replace(".csv", "")
-                hour = int(hour_str)
+                date_str = parts[0]  # YYYY-MM-DD
+                hour = int(parts[1])  # HH (0-23)
 
                 # Check if data exists in database
                 logs = self.db.get_logs_by_hour(date_str, hour)
@@ -189,25 +177,18 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     self.send_error(404, f"No data found for {date_str} hour {hour}")
                     return
 
-                # For compatibility, create a pseudo csv_file path
-                csv_file = self.logs_dir / date_str / "csv" / csv_filename
-
-                # Check if this is the current hour's file
+                # Check if this is the current hour
                 now = datetime.now()
                 current_date_str = now.strftime("%Y-%m-%d")
-                current_hour_str = now.strftime("%Y%m%d_%H")
-                is_current_hour = (
-                    date_str == current_date_str and current_hour_str in csv_filename
-                )
+                current_hour = now.hour
+                is_current_hour = (date_str == current_date_str and hour == current_hour)
 
                 print(
-                    f"\n[*] Serving visualization for: {csv_file.name} (current_hour={is_current_hour})"
+                    f"
+[*] Serving visualization for: {date_str} hour {hour} (current_hour={is_current_hour})"
                 )
 
-                html_dir = self.logs_dir / date_str / "html"
-                html_file = html_dir / f"{csv_file.stem}_visualization.html"
-
-                # Use Chart.js for all hours (current and past)
+                                # Use Chart.js for all hours (current and past)
                 # Current hour: includes WebSocket for real-time updates
                 # Past hours: static Chart.js without WebSocket
                 if is_current_hour:
@@ -222,7 +203,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     )
 
                 # Get navigation from database (not filesystem)
-                prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
+                prev_url, next_url = self._get_navigation_urls(date_str, hour)
 
                 # Inject Gruvbox background CSS and navigation buttons
                 gruvbox_css = """
@@ -462,9 +443,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     files_by_date[date_str], reverse=True
                 ):
                     # Format time display
-                    formatted_time = f"{hour}:00 - {hour}:59"
+                    formatted_time = f"{hour:02d}:00 - {hour:02d}:59"
 
-                    view_url = f"/view/{date_str}/{filename}"
+                    view_url = f"/view/{date_str}/{hour}"
                     html += f'''    <div class="file-item">
         <a href="{view_url}">{filename}</a>
         <span class="file-meta">{formatted_time} ({count} entries)</span>
@@ -478,11 +459,8 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         return html
 
-    def _get_navigation_urls(self, date_str, csv_filename):
+    def _get_navigation_urls(self, date_str, hour):
         """Get previous and next URLs from database available hours."""
-        # Extract hour from filename (monitor_20251103_23.csv -> 23)
-        hour_str = csv_filename.split("_")[-1].replace(".csv", "")
-        hour = int(hour_str)
 
         # Get all available hours from database
         all_hours = (
@@ -491,7 +469,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         # Debug logging
         print(
-            f"[DEBUG] Navigation for: date={date_str}, hour={hour}, filename={csv_filename}"
+            f"[DEBUG] Navigation for: date={date_str}, hour={hour}"
         )
         print(f"[DEBUG] Available hours: {len(all_hours)} total")
         if all_hours:
@@ -515,20 +493,14 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             if current_index > 0:
                 prev_date, prev_hour_str, _ = all_hours[current_index - 1]
                 prev_hour = int(prev_hour_str)
-                prev_filename = (
-                    f"monitor_{prev_date.replace('-', '')}_{prev_hour:02d}.csv"
-                )
-                prev_url = f"/view/{prev_date}/{prev_filename}"
+                prev_url = f"/view/{prev_date}/{prev_hour}"
                 print(f"[DEBUG] Prev URL: {prev_url}")
 
             # Next hour (higher index = older)
             if current_index < len(all_hours) - 1:
                 next_date, next_hour_str, _ = all_hours[current_index + 1]
                 next_hour = int(next_hour_str)
-                next_filename = (
-                    f"monitor_{next_date.replace('-', '')}_{next_hour:02d}.csv"
-                )
-                next_url = f"/view/{next_date}/{next_filename}"
+                next_url = f"/view/{next_date}/{next_hour}"
                 print(f"[DEBUG] Next URL: {next_url}")
         else:
             print(
@@ -537,13 +509,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         return prev_url, next_url
 
-    def _generate_chartjs_with_websocket(self, csv_file, date_str, csv_filename):
+    def _generate_chartjs_with_websocket(self, date_str, hour):
         """Generate Chart.js HTML with WebSocket support for current hour."""
-        csv_url = f"/csv/{date_str}/{csv_filename}"
+        csv_url = f"/csv/{date_str}/{hour}"
         ws_port = 8081  # WebSocket server port
 
         # Get navigation from database (not filesystem)
-        prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
+        prev_url, next_url = self._get_navigation_urls(date_str, hour)
 
         prev_btn_attr = (
             "disabled"
@@ -559,13 +531,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Network Monitor - {csv_filename} (Live)</title>
+    <title>Network Monitor - {date_str} {hour:02d}:00 (Live)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         html, body {{
             background-color: #1d2021 !important;
             margin: 0;
-            padding: 40px 0 40px 0;
+            padding: 0;
             min-height: 100vh;
             color: #ebdbb2;
             font-family: monospace;
@@ -585,6 +557,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             font-size: 20px;
             font-weight: bold;
             margin-bottom: 10px;
+            padding: 40px 0 0 0;
         }}
         .chart-subtitle {{
             text-align: center;
@@ -594,13 +567,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         }}
         .nav-buttons {{
             position: fixed;
-            top: 630px;
+            top: 690px;
             left: 40px;
             z-index: 1000;
         }}
         .nav-buttons-right {{
             position: fixed;
-            top: 630px;
+            top: 690px;
             right: 40px;
             display: flex;
             gap: 10px;
@@ -954,12 +927,12 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         return html
 
-    def _generate_chartjs_static(self, csv_file, date_str, csv_filename):
+    def _generate_chartjs_static(self, date_str, hour):
         """Generate static Chart.js HTML for past hours (no WebSocket)."""
-        csv_url = f"/csv/{date_str}/{csv_filename}"
+        csv_url = f"/csv/{date_str}/{hour}"
 
         # Get navigation from database (not filesystem)
-        prev_url, next_url = self._get_navigation_urls(date_str, csv_filename)
+        prev_url, next_url = self._get_navigation_urls(date_str, hour)
 
         prev_btn_attr = (
             "disabled"
@@ -975,7 +948,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Network Monitor - {csv_filename}</title>
+    <title>Network Monitor - {date_str} {hour:02d}:00</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         html, body {{
