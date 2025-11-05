@@ -40,6 +40,27 @@ class NetworkMonitorDB:
             ON network_logs(timestamp)
         """)
 
+        # Speed test table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS speed_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                download_mbps REAL NOT NULL,
+                upload_mbps REAL NOT NULL,
+                ping_ms REAL,
+                server_host TEXT,
+                server_name TEXT,
+                server_country TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Index for faster speed test queries
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_speed_timestamp
+            ON speed_tests(timestamp)
+        """)
+
         self.conn.commit()
 
     def insert_log(self, timestamp, status, response_time, success_count, total_count, failed_count):
@@ -113,6 +134,24 @@ class NetworkMonitorDB:
 
         return "\n".join(csv_lines)
 
+    def export_to_csv_range(self, start_time, end_time):
+        """Export logs within a time range to CSV format.
+
+        Args:
+            start_time: ISO format timestamp (YYYY-MM-DD HH:MM:SS)
+            end_time: ISO format timestamp (YYYY-MM-DD HH:MM:SS)
+        """
+        logs = self.get_logs_by_date_range(start_time, end_time)
+
+        csv_lines = ["timestamp, status, response_time, success_count, total_count, failed_count"]
+        for log in logs:
+            timestamp, status, response_time, success_count, total_count, failed_count = log
+            # Format response_time as null if None
+            rt_str = "null" if response_time is None else f"{response_time:.3f}"
+            csv_lines.append(f"{timestamp}, {status}, {rt_str}, {success_count}, {total_count}, {failed_count}")
+
+        return "\n".join(csv_lines)
+
     def cleanup_old_logs(self, days=10):
         """Delete logs older than specified days."""
         cursor = self.conn.cursor()
@@ -122,6 +161,14 @@ class NetworkMonitorDB:
         """, (days,))
 
         deleted = cursor.rowcount
+
+        # Also cleanup old speed tests
+        cursor.execute("""
+            DELETE FROM speed_tests
+            WHERE timestamp < datetime('now', '-' || ? || ' days')
+        """, (days,))
+
+        deleted += cursor.rowcount
         self.conn.commit()
 
         # Vacuum to reclaim space
@@ -140,6 +187,118 @@ class NetworkMonitorDB:
         """)
 
         return cursor.fetchone()
+
+    def get_earliest_log(self):
+        """Get the earliest log entry."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT timestamp, status, response_time, success_count, total_count, failed_count
+            FROM network_logs
+            ORDER BY id ASC
+            LIMIT 1
+        """)
+
+        return cursor.fetchone()
+
+    def insert_speed_test(self, timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country):
+        """Insert a speed test result."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO speed_tests
+            (timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def get_latest_speed_test(self):
+        """Get the most recent speed test result."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+            FROM speed_tests
+            ORDER BY id DESC
+            LIMIT 1
+        """)
+        return cursor.fetchone()
+
+    def get_speed_tests_by_date(self, date_str):
+        """Get all speed tests for a specific date."""
+        start_time = f"{date_str} 00:00:00"
+        end_time = f"{date_str} 23:59:59"
+
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+            FROM speed_tests
+            WHERE timestamp >= ? AND timestamp <= ?
+            ORDER BY timestamp ASC
+        """, (start_time, end_time))
+
+        return cursor.fetchall()
+
+    def get_recent_speed_tests(self, hours=24):
+        """Get speed tests from the last N hours."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+            FROM speed_tests
+            WHERE timestamp >= datetime('now', '-' || ? || ' hours')
+            ORDER BY timestamp ASC
+        """, (hours,))
+
+        return cursor.fetchall()
+
+    def get_speed_tests_range(self, start_time=None, end_time=None):
+        """Get speed tests within a specific time range.
+
+        Args:
+            start_time: ISO format timestamp (YYYY-MM-DD HH:MM:SS) or None for no start limit
+            end_time: ISO format timestamp (YYYY-MM-DD HH:MM:SS) or None for no end limit
+        """
+        cursor = self.conn.cursor()
+
+        if start_time and end_time:
+            cursor.execute("""
+                SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+                FROM speed_tests
+                WHERE timestamp >= ? AND timestamp <= ?
+                ORDER BY timestamp ASC
+            """, (start_time, end_time))
+        elif start_time:
+            cursor.execute("""
+                SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+                FROM speed_tests
+                WHERE timestamp >= ?
+                ORDER BY timestamp ASC
+            """, (start_time,))
+        elif end_time:
+            cursor.execute("""
+                SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+                FROM speed_tests
+                WHERE timestamp <= ?
+                ORDER BY timestamp ASC
+            """, (end_time,))
+        else:
+            cursor.execute("""
+                SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+                FROM speed_tests
+                ORDER BY timestamp ASC
+            """)
+
+        return cursor.fetchall()
+
+    def cleanup_old_speed_tests(self, days=30):
+        """Delete speed tests older than specified days."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM speed_tests
+            WHERE timestamp < datetime('now', '-' || ? || ' days')
+        """, (days,))
+
+        deleted = cursor.rowcount
+        self.conn.commit()
+        return deleted
 
     def close(self):
         """Close database connection."""

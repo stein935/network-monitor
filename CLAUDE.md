@@ -4,58 +4,72 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Network Monitor is a Python-based daemon that continuously monitors network connectivity by pinging 8.8.8.8, storing data in SQLite database with real-time web visualization.
+Network Monitor is a Python-based daemon that continuously monitors network connectivity and internet speed, storing data in SQLite database with real-time web visualization.
 
 **Key characteristics:**
 - **SQLite storage:** Fast, indexed database storage (Phase 1)
 - **Chart.js visualization:** 93% smaller bundle than Plotly (Phase 2)
-- **WebSocket real-time updates:** 30-second batches for current hour (Phase 2)
+- **WebSocket real-time updates:** 30-second batches for live monitoring (Phase 2)
 - **nginx reverse proxy:** Gzip compression, better concurrency (Phase 3)
+- **Internet speed testing:** Automated speed tests every 15 minutes via speedtest-cli
+- **Dual monitoring:** Network latency (ping to 8.8.8.8) + bandwidth (speedtest-cli)
+- **Single-page dashboard:** Unified view of network monitoring and speed tests
 - Daemon mode: Runs continuously without time limits
 - CSV export on-demand: Historical data exported dynamically from SQLite
-- Auto cleanup: Removes logs older than 10 days with VACUUM
+- Auto cleanup: Removes logs older than 30 days with VACUUM
 - Docker deployment: Optimized for Raspberry Pi Zero 2 W
 - **Performance improvements:**
   - 70% reduction in disk I/O (SQLite vs CSV)
   - 93% smaller page loads (Chart.js vs Plotly)
-  - 95% CPU reduction for current hour monitoring (WebSocket vs polling)
+  - 95% CPU reduction for live monitoring (WebSocket vs polling)
   - 70% bandwidth reduction (nginx gzip compression)
 
 ## Architecture
 
 ### Core Components
 
-1. **monitor.py** - SQLite-based monitor daemon (Phase 1):
+1. **monitor.py** - SQLite-based monitor daemon with speed testing (Phase 1):
    - Pings 8.8.8.8 every `FREQUENCY` seconds (default: 1)
    - Collects `SAMPLE_SIZE` samples (default: 5) before logging
    - Writes directly to SQLite: `logs/network_monitor.db`
+   - **Speed test thread:** Runs speedtest-cli every 15 minutes in background
    - Indexed queries for fast retrieval
    - Performs cleanup with VACUUM once per hour
    - Handles both macOS and Linux ping output formats
 
 2. **serve.py** - Live web server with SQLite backend, Chart.js, and WebSocket support (Phase 2):
-   - **HTTP server (port 8080):** Serves HTML and CSV exports
+   - **HTTP server (port 8090):** Serves HTML, API endpoints, and CSV exports
    - **WebSocket server (port 8081):** Real-time data pushes every 30 seconds
    - Reads from SQLite database (`db.py`)
-   - Index page lists available hours from database with entry counts
+   - **Single-page dashboard** with dual monitoring:
+     - Network monitoring chart (1-hour window, time-based navigation)
+     - Speed test chart (12-hour window, time-based navigation)
+     - Speed test stats display (download, upload, server, last test)
    - **Chart.js for all visualizations:**
-     - **Current hour**: Chart.js with WebSocket updates (30s batches) + HTTP polling fallback (60s)
-     - **Past hours**: Static Chart.js visualizations (no updates)
-   - Exports CSV on-demand via `/csv/YYYY-MM-DD/HH` endpoint
-   - Navigation buttons (Back, Previous, Next)
+     - **Live data**: Chart.js with WebSocket updates (30s batches) + HTTP polling fallback (60s)
+     - **Historical data**: Static Chart.js visualizations (no updates)
+   - **API endpoints:**
+     - `/api/network-logs/earliest` - Get earliest network log
+     - `/api/speed-tests/latest` - Get latest speed test result
+     - `/api/speed-tests/recent` - Get recent speed tests with optional time range
+   - **CSV export:**
+     - Time-range based: `/csv/?start_time=...&end_time=...`
+     - Legacy format: `/csv/YYYY-MM-DD/HH`
    - Binds to 0.0.0.0 for network access
    - **Chart.js benefits:** 93% smaller (200KB vs 3MB Plotly), faster rendering, lower memory
 
-3. **db.py** - SQLite database handler:
-   - Schema with indexed timestamps
-   - Insert, query, export functions
-   - Auto-cleanup with VACUUM
+3. **db.py** - SQLite database handler with dual tables:
+   - **network_logs table:** Ping monitoring data with indexed timestamps
+   - **speed_tests table:** Speed test results with indexed timestamps
+   - Insert, query, export functions for both tables
+   - Auto-cleanup with VACUUM (removes data older than retention period)
    - Export to CSV format for on-demand generation
+   - Time-range query support for both network logs and speed tests
 
 4. **nginx.conf** - Reverse proxy configuration (Phase 3):
-   - Listens on port 80
-   - Proxies HTTP requests to serve.py:8080
-   - Proxies WebSocket to serve.py:8081
+   - Listens on port 8080 (external)
+   - Proxies HTTP requests to serve.py:8090 (internal)
+   - Proxies WebSocket to serve.py:8081 via `/ws` path
    - Gzip compression for 70% bandwidth reduction
    - Security headers
 
@@ -68,26 +82,26 @@ Network Monitor is a Python-based daemon that continuously monitors network conn
 
 **Architecture (Phase 3):**
 ```
-Browser → nginx:80 (gzip, proxy)
+Browser → nginx:8080 (gzip, proxy)
               ↓
-         serve.py:8080 (HTTP - Chart.js generation, CSV export)
+         serve.py:8090 (HTTP - Chart.js generation, API, CSV export)
               ↓
-         serve.py:8081 (WebSocket - 30s batches)
+         serve.py:8081 (WebSocket - 30s batches via /ws path)
               ↓
          SQLite database (logs/network_monitor.db)
               ↑
-         monitor.py (writes every minute)
+         monitor.py (network logs every minute + speed tests every 15 min)
 ```
 
-**Current hour (live monitoring):**
+**Live monitoring (network + speed tests):**
 ```
 monitor.py → SQLite → serve.py WebSocket → Browser Chart.js (30s updates)
-                                         → Fallback: HTTP polling (60s)
+                                         → Fallback: HTTP polling (60s for network, 5min for speed)
 ```
 
-**Past hours (static viewing):**
+**Historical data viewing:**
 ```
-SQLite → serve.py → generates Chart.js HTML → Browser
+SQLite → serve.py API/CSV → Browser Chart.js (time-range queries)
 ```
 
 ### SQLite Schema
@@ -107,7 +121,23 @@ CREATE TABLE network_logs (
 CREATE INDEX idx_timestamp ON network_logs(timestamp);
 ```
 
-**CSV Export Format** (on-demand):
+**Table: `speed_tests`**
+```sql
+CREATE TABLE speed_tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    download_mbps REAL NOT NULL,
+    upload_mbps REAL NOT NULL,
+    ping_ms REAL,
+    server_host TEXT,
+    server_name TEXT,
+    server_country TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_speed_timestamp ON speed_tests(timestamp);
+```
+
+**CSV Export Format** (network logs, on-demand):
 ```
 timestamp, status, response_time, success_count, total_count, failed_count
 ```
@@ -156,7 +186,7 @@ docker compose up -d
 
 **Access web dashboard:**
 - External: `http://<pi-ip>:8080`
-- Inside container: `http://localhost:80` (nginx)
+- Inside container: `http://localhost:8080` (nginx)
 
 
 ## Systemd Services (Raspberry Pi)
@@ -193,17 +223,57 @@ Edit systemd service files or pass as arguments:
 
 - `FREQUENCY`: Seconds between pings (default: 1)
 - `SAMPLE_SIZE`: Number of pings to average before logging (default: 60)
-- `LOG_RETENTION_DAYS`: Days to keep logs (default: 10, set in monitor.py)
+- `LOG_RETENTION_DAYS`: Days to keep logs (default: 30, set in monitor.py)
+- **Speed tests:** Automatically run every 15 minutes (hardcoded in monitor.py)
 
 ### Port Mapping
 
-Edit `docker-compose.yml` to change exposed port:
+Edit `docker-compose.yml` to change exposed ports:
 ```yaml
 ports:
-  - "8080:80"  # External:Internal (nginx listens on port 80 inside container)
+  - "8080:8080"  # External:Internal (nginx HTTP)
+  - "8081:8081"  # External:Internal (WebSocket)
 ```
 
+**Internal port architecture:**
+- nginx listens on port 8080 (internal)
+- Python HTTP server (serve.py) listens on port 8090 (internal, proxied by nginx)
+- Python WebSocket server listens on port 8081 (internal, proxied by nginx via /ws)
+
 ## Important Implementation Details
+
+### Speed Test Integration
+
+monitor.py runs speed tests in a separate daemon thread:
+
+```python
+def speed_test_loop(self):
+    """Separate thread for running speed tests every 15 minutes."""
+    time.sleep(30)  # Initial delay
+    while True:
+        try:
+            self.run_speed_test()
+        except Exception as e:
+            print(f"[!] Speed test loop error: {e}")
+        time.sleep(900)  # 15 minutes
+
+# Started in run() method
+speed_test_thread = threading.Thread(target=self.speed_test_loop, daemon=True)
+speed_test_thread.start()
+```
+
+**Speed test data flow:**
+1. speedtest-cli runs with `--json` flag
+2. Results parsed from JSON output (download, upload, ping, server info)
+3. Data inserted into `speed_tests` table
+4. Dashboard fetches via `/api/speed-tests/latest` and `/api/speed-tests/recent`
+5. Chart updates automatically via polling (5min for live, static for historical)
+
+**Benefits:**
+- Automated bandwidth monitoring
+- Historical speed tracking
+- Server location tracking
+- Minimal overhead (runs in background thread)
 
 ### Cross-Platform Ping Parsing
 
@@ -251,16 +321,19 @@ is_current_hour = (date_str == current_date_str and current_hour_str in csv_file
 
 ### WebSocket Implementation
 
-JavaScript establishes WebSocket connection with runtime URL:
+JavaScript establishes WebSocket connection via nginx proxy:
 ```javascript
-const wsUrl = `ws://${location.hostname}:8081`;
+// Uses /ws path through nginx proxy (location.host includes port)
+const wsUrl = `ws://${location.host}/ws`;
 const ws = new WebSocket(wsUrl);
 
 // Fallback to HTTP polling on error
 ws.onerror = () => {
-    setInterval(() => fetchData(), 60000);
+    startPolling();  // 60s for network, 5min for speed tests
 };
 ```
+
+nginx proxies `/ws` to serve.py:8081 with proper WebSocket upgrade headers.
 
 ## Troubleshooting
 
@@ -284,31 +357,25 @@ location /ws {
 
 ### Docker on ARM (Raspberry Pi)
 
-Dockerfile uses system packages for pandas/plotly to avoid lengthy compilation (20-45 minutes) on ARM:
+Dockerfile uses minimal dependencies to keep image small and avoid compilation:
 ```dockerfile
 RUN apt-get update && apt-get install -y \
-    bc \
+    python3 \
     iputils-ping \
     curl \
     procps \
-    python3-pandas \
-    python3-plotly \
-    python3-numpy \
+    nginx \
+    python3-websockets \
+    speedtest-cli \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-This approach builds in ~10-15 minutes on Pi Zero 2 W instead of 20-45+ minutes required for pip compilation.
+This approach builds quickly on Pi Zero 2 W and includes all necessary tools:
+- **speedtest-cli**: For internet speed testing
+- **python3-websockets**: For real-time updates
+- **nginx**: For reverse proxy and gzip compression
 
-**Resource limits are configured in docker-compose.yml:**
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 256M
-      cpus: '0.5'
-```
-
-This prevents the container from consuming all available resources on the Pi Zero 2 W (512MB total RAM).
+**Note:** Resource limits were removed from docker-compose.yml to allow speed tests to run properly.
 
 ### Memory constraints on Pi Zero 2 W
 
@@ -319,43 +386,114 @@ Reduce monitoring frequency and increase sample size:
 
 ### Port already in use
 
-Check and kill existing server:
+Check and kill existing servers:
 ```bash
-lsof -ti:8000
+# Check nginx on port 8080
+lsof -ti:8080
+docker exec network-monitor nginx -s quit
+
+# Check Python HTTP server on port 8090
+lsof -ti:8090
 pkill -f "python.*serve.py"
+
+# Check WebSocket server on port 8081
+lsof -ti:8081
+pkill -f "python.*serve.py"
+```
+
+### Speed tests not running
+
+Check if monitor.py is running and speed test thread is active:
+```bash
+# Check monitor.py process
+docker exec network-monitor pgrep -f monitor.py
+
+# Check speed test data in database
+docker exec network-monitor python3 -c "from db import NetworkMonitorDB; db = NetworkMonitorDB('logs/network_monitor.db'); print(f'Speed tests: {len(db.get_recent_speed_tests(24))}')"
+
+# View monitor logs for speed test output
+docker logs network-monitor | grep -i speed
 ```
 
 ## Dependencies
 
 **System packages (installed in Docker):**
-- python3, python3-pip
-- bc (for calculations)
-- ping (iputils-ping)
-- nginx
-- python3-pandas
-- python3-plotly
-- python3-numpy
-- python3-websockets
+- python3 (runtime)
+- iputils-ping (ping command)
+- curl (for testing)
+- procps (process management)
+- nginx (reverse proxy)
+- python3-websockets (real-time updates)
+- speedtest-cli (internet speed testing)
 
 ## File Structure
 
 ```
 network-monitor/
-├── monitor.py              # SQLite-based monitor daemon
+├── monitor.py              # SQLite-based monitor daemon with speed tests
 ├── serve.py                # Python web server (HTTP + WebSocket)
-├── db.py                   # SQLite database handler
+├── db.py                   # SQLite database handler (dual tables)
 ├── nginx.conf              # nginx reverse proxy config
 ├── start_services.sh       # Service startup script
-├── generate_static.sh      # Nightly pre-generation (future)
 ├── Dockerfile              # Docker image definition
 ├── docker-compose.yml      # Docker container config
+├── static/
+│   ├── dashboard.css       # Dashboard styling (Gruvbox theme)
+│   └── dashboard.js        # Dashboard logic (Chart.js, WebSocket)
 ├── README.md               # User documentation
 ├── DEPLOYMENT.md           # Raspberry Pi deployment guide
-├── OPTIMIZATION.md         # Performance optimization details
 ├── CLAUDE.md               # This file
 └── logs/
-    ├── network_monitor.db  # SQLite database
-    └── YYYY-MM-DD/         # Daily directories (CSV exports only)
-        └── csv/            # CSV exports (on-demand)
-            └── monitor_YYYYMMDD_HH.csv
+    └── network_monitor.db  # SQLite database (network_logs + speed_tests tables)
+```
+
+## Dashboard Implementation
+
+### Time-Based Navigation
+
+The dashboard uses time-based navigation instead of file-based:
+
+**Network monitoring:**
+- Shows 1-hour window of data
+- Navigation buttons move forward/backward by 1 hour
+- Live view (offset=0) shows current hour with WebSocket updates
+- Historical views (offset<0) show static data from that time range
+
+**Speed tests:**
+- Shows 12-hour window of data
+- Navigation buttons move forward/backward by 12 hours
+- Live view (offset=0) shows last 12 hours with automatic polling (5min)
+- Historical views (offset<0) show static data from that time range
+
+**Implementation (dashboard.js):**
+```javascript
+let networkHoursOffset = 0; // 0 = live, negative = hours back
+let speedTestHoursOffset = 0; // 0 = live, negative = hours back
+
+// Calculate time range
+const now = new Date();
+const endTime = new Date(now.getTime() + (offset * 60 * 60 * 1000));
+const startTime = new Date(endTime.getTime() - (windowSize * 60 * 60 * 1000));
+
+// Fetch data with time range
+fetch(`/csv/?start_time=${startTimeStr}&end_time=${endTimeStr}`)
+```
+
+### Single-Page Dashboard
+
+The dashboard combines both monitoring types in one view:
+- **Top section:** Network monitoring chart (response time + success rate)
+- **Middle section:** Speed test statistics (download, upload, server, last test)
+- **Bottom section:** Speed test chart (download + upload over time)
+- **Data list:** Reference only - navigation is time-based
+
+### API Endpoints
+
+**Network logs:**
+- `GET /api/network-logs/earliest` - Returns earliest log entry (for nav button state)
+- `GET /csv/?start_time=...&end_time=...` - CSV export for time range
+
+**Speed tests:**
+- `GET /api/speed-tests/latest` - Returns latest speed test (for stats display)
+- `GET /api/speed-tests/recent?start_time=...&end_time=...` - Recent tests for chart
 ```

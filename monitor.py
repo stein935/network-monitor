@@ -11,6 +11,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 import re
+import threading
+import json
 
 # Add parent directory to path to import db module
 sys.path.insert(0, str(Path(__file__).parent))
@@ -80,7 +82,68 @@ class NetworkMonitor:
         """Clean up logs older than retention period."""
         deleted = self.db.cleanup_old_logs(self.log_retention_days)
         if deleted > 0:
-            print(f"[*] Cleaned up {deleted} old log entries")
+            print(f"[*] Cleaned up {deleted} old log/speed test entries")
+
+    def run_speed_test(self):
+        """Run internet speed test using speedtest-cli."""
+        try:
+            print("[*] Running speed test...")
+            result = subprocess.run(
+                ["speedtest-cli", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=120  # 2 minute timeout
+            )
+
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+
+                # Extract relevant data
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                download_mbps = data.get("download", 0) / 1_000_000  # Convert to Mbps
+                upload_mbps = data.get("upload", 0) / 1_000_000  # Convert to Mbps
+                ping_ms = data.get("ping", None)
+
+                # Server info
+                server = data.get("server", {})
+                server_host = server.get("host", "")
+                server_name = server.get("name", "")
+                server_country = server.get("country", "")
+
+                # Insert into database
+                test_id = self.db.insert_speed_test(
+                    timestamp, download_mbps, upload_mbps, ping_ms,
+                    server_host, server_name, server_country
+                )
+
+                print(f"[{timestamp}] Speed Test - Download: {download_mbps:.2f} Mbps, "
+                      f"Upload: {upload_mbps:.2f} Mbps, Ping: {ping_ms:.2f} ms "
+                      f"[Server: {server_name}, {server_country}] [ID: {test_id}]")
+            else:
+                print(f"[!] Speed test failed: {result.stderr}")
+
+        except subprocess.TimeoutExpired:
+            print("[!] Speed test timed out")
+        except json.JSONDecodeError as e:
+            print(f"[!] Speed test JSON parse error: {e}")
+        except Exception as e:
+            print(f"[!] Speed test error: {e}", file=sys.stderr)
+
+    def speed_test_loop(self):
+        """Separate thread for running speed tests every 15 minutes."""
+        print("[*] Starting speed test loop (every 15 minutes)...")
+
+        # Initial delay of 30 seconds to let the monitor start up
+        time.sleep(30)
+
+        while True:
+            try:
+                self.run_speed_test()
+            except Exception as e:
+                print(f"[!] Speed test loop error: {e}", file=sys.stderr)
+
+            # Wait 15 minutes before next test
+            time.sleep(900)  # 900 seconds = 15 minutes
 
     def run(self):
         """Main monitoring loop."""
@@ -93,6 +156,10 @@ class NetworkMonitor:
 
         # Initial cleanup
         self.cleanup_old_logs()
+
+        # Start speed test thread
+        speed_test_thread = threading.Thread(target=self.speed_test_loop, daemon=True)
+        speed_test_thread.start()
 
         try:
             while True:

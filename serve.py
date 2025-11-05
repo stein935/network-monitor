@@ -140,38 +140,153 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error generating dashboard: {str(e)}")
 
+        elif self.path == "/api/network-logs/earliest":
+            # Get earliest network log
+            try:
+                earliest = self.db.get_earliest_log()
+
+                if earliest:
+                    timestamp, status, response_time, success_count, total_count, failed_count = earliest
+                    data = {
+                        "timestamp": timestamp,
+                        "status": status,
+                        "response_time": response_time,
+                        "success_count": success_count,
+                        "total_count": total_count,
+                        "failed_count": failed_count
+                    }
+                    content = json.dumps(data).encode("utf-8")
+
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    self.send_header("Content-Length", len(content))
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    self.send_error(404, "No network log data available")
+            except Exception as e:
+                self.send_error(500, f"Error fetching network log data: {str(e)}")
+
+        elif self.path == "/api/speed-tests/latest":
+            # Get latest speed test result
+            try:
+                latest = self.db.get_latest_speed_test()
+
+                if latest:
+                    timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country = latest
+                    data = {
+                        "timestamp": timestamp,
+                        "download_mbps": round(download_mbps, 2),
+                        "upload_mbps": round(upload_mbps, 2),
+                        "ping_ms": round(ping_ms, 2) if ping_ms else None,
+                        "server_host": server_host,
+                        "server_name": server_name,
+                        "server_country": server_country
+                    }
+                    content = json.dumps(data).encode("utf-8")
+
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    self.send_header("Content-Length", len(content))
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    self.send_error(404, "No speed test data available")
+            except Exception as e:
+                self.send_error(500, f"Error fetching speed test data: {str(e)}")
+
+        elif self.path.startswith("/api/speed-tests/recent"):
+            # Get recent speed tests with optional time range
+            try:
+                # Parse query parameters
+                from urllib.parse import urlparse, parse_qs
+                parsed = urlparse(self.path)
+                params = parse_qs(parsed.query)
+
+                # Get start_time and end_time from query params
+                start_time = params.get('start_time', [None])[0]
+                end_time = params.get('end_time', [None])[0]
+
+                # Use time range if provided, otherwise default to last 24 hours
+                if start_time or end_time:
+                    tests = self.db.get_speed_tests_range(start_time, end_time)
+                else:
+                    tests = self.db.get_recent_speed_tests(hours=24)
+
+                results = []
+                for test in tests:
+                    timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country = test
+                    results.append({
+                        "timestamp": timestamp,
+                        "download_mbps": round(download_mbps, 2),
+                        "upload_mbps": round(upload_mbps, 2),
+                        "ping_ms": round(ping_ms, 2) if ping_ms else None,
+                        "server_host": server_host,
+                        "server_name": server_name,
+                        "server_country": server_country
+                    })
+
+                content = json.dumps(results).encode("utf-8")
+
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Content-Length", len(content))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content)
+            except Exception as e:
+                self.send_error(500, f"Error fetching speed test data: {str(e)}")
+
         elif self.path.startswith("/csv/"):
             # Export CSV from SQLite for dynamic visualization
             try:
-                # Path format: /csv/YYYY-MM-DD/HH
-                csv_path = urllib.parse.unquote(self.path[5:])  # Remove /csv/ prefix
+                # Parse query parameters for time range support
+                from urllib.parse import urlparse, parse_qs
+                parsed = urlparse(self.path)
+                params = parse_qs(parsed.query)
 
-                # Parse date and hour from path
-                if "/" not in csv_path:
-                    self.send_error(
-                        400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH"
-                    )
-                    return
+                # Get start_time and end_time from query params
+                start_time = params.get('start_time', [None])[0]
+                end_time = params.get('end_time', [None])[0]
 
-                parts = csv_path.split("/")
-                if len(parts) < 2:
-                    self.send_error(
-                        400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH"
-                    )
-                    return
+                # Use time range if provided, otherwise use legacy date/hour format
+                if start_time and end_time:
+                    csv_content = self.db.export_to_csv_range(start_time, end_time)
+                else:
+                    # Legacy path format: /csv/YYYY-MM-DD/HH
+                    csv_path = urllib.parse.unquote(parsed.path[5:])  # Remove /csv/ prefix
 
-                date_str = parts[0]  # YYYY-MM-DD
-                hour = int(parts[1])  # HH (0-23)
+                    # Parse date and hour from path
+                    if "/" not in csv_path:
+                        self.send_error(
+                            400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH or /csv?start_time=...&end_time=..."
+                        )
+                        return
 
-                # Export from database
-                csv_content = self.db.export_to_csv(date_str, hour)
+                    parts = csv_path.split("/")
+                    if len(parts) < 2:
+                        self.send_error(
+                            400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH or /csv?start_time=...&end_time=..."
+                        )
+                        return
+
+                    date_str = parts[0]  # YYYY-MM-DD
+                    hour = int(parts[1])  # HH (0-23)
+
+                    # Export from database
+                    csv_content = self.db.export_to_csv(date_str, hour)
 
                 if (
                     not csv_content
                     or csv_content
                     == "timestamp, status, response_time, success_count, total_count, failed_count"
                 ):
-                    self.send_error(404, f"No data found for {date_str} hour {hour}")
+                    self.send_error(404, f"No data found")
                     return
 
                 content = csv_content.encode("utf-8")
@@ -274,13 +389,15 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     <span style="color: var(--gray);">reading:</span>
                     <span class="file-name">{initial_filename}</span>
                 </div>
-                <div class="status-indicators">
-                    <div class="live-indicator" style="display: {'flex' if is_current_hour else 'none'};">
-                        <div class="live-dot"></div>
-                        <span>Live</span>
-                    </div>
-                    <div class="websocket-status">
-                        WebSocket: Connecting...
+                <div class="status-right">
+                    <div class="status-indicators">
+                        <div class="live-indicator" style="display: {'flex' if is_current_hour else 'none'};">
+                            <div class="live-dot"></div>
+                            <span>Live</span>
+                        </div>
+                        <div class="websocket-status">
+                            WebSocket: Connecting...
+                        </div>
                     </div>
                 </div>
             </div>
@@ -288,6 +405,20 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         <!-- Chart -->
         <div class="chart-container">
+            <div class="section-header">
+                <div>
+                    <div class="section-title">🌐 Network Monitoring</div>
+                    <div class="section-subtitle">Response time and success rate tracking</div>
+                </div>
+                <div class="network-nav-group">
+                    <button class="network-nav-button" id="networkPrevBtn" onclick="goNetworkPrevious()">
+                        <span>←</span>
+                    </button>
+                    <button class="network-nav-button" id="networkNextBtn" onclick="goNetworkNext()">
+                        <span>→</span>
+                    </button>
+                </div>
+            </div>
             <div class="chart-wrapper">
                 <canvas id="networkChart"></canvas>
             </div>
@@ -303,18 +434,58 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             </div>
         </div>
 
-        <!-- Navigation -->
-        <div class="navigation">
-            <button class="nav-button" onclick="goHome()">
-                <span>←</span> Home
-            </button>
-            <div class="nav-group">
-                <button class="nav-button" id="prevBtn" data-url="{prev_url or ''}" {'disabled' if not prev_url else ''} onclick="goPrevious()">
-                    <span>←</span> Prev
-                </button>
-                <button class="nav-button" id="nextBtn" data-url="{next_url or ''}" {'disabled' if not next_url else ''} onclick="goNext()">
-                    Next <span>→</span>
-                </button>
+        <!-- Speed Test Section -->
+        <div class="speed-test-container">
+            <div class="section-header">
+                <div>
+                    <div class="section-title">⚡ Internet Speed Tests</div>
+                    <div class="section-subtitle">Tests run every 15 minutes</div>
+                </div>
+                <div class="speed-nav-group">
+                    <button class="speed-nav-button" id="speedPrevBtn" onclick="goSpeedPrevious()">
+                        <span>←</span>
+                    </button>
+                    <button class="speed-nav-button" id="speedNextBtn" onclick="goSpeedNext()">
+                        <span>→</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="speed-stats">
+                <div class="speed-stat">
+                    <div class="speed-stat-label">Download</div>
+                    <div class="speed-stat-value download" id="speedDownload">--</div>
+                    <div class="speed-stat-unit">Mbps</div>
+                </div>
+                <div class="speed-stat">
+                    <div class="speed-stat-label">Upload</div>
+                    <div class="speed-stat-value upload" id="speedUpload">--</div>
+                    <div class="speed-stat-unit">Mbps</div>
+                </div>
+                <div class="speed-stat">
+                    <div class="speed-stat-label">Server</div>
+                    <div class="speed-stat-value" style="font-size: 18px;" id="speedServer">--</div>
+                    <div class="speed-stat-server" id="speedServerHost">--</div>
+                </div>
+                <div class="speed-stat">
+                    <div class="speed-stat-label">Last Test</div>
+                    <div class="speed-stat-value" style="font-size: 18px;" id="speedLastTest">--:--:--</div>
+                    <div class="speed-stat-unit" id="speedLastTestDate">----</div>
+                </div>
+            </div>
+
+            <div class="chart-wrapper">
+                <canvas id="speedChart"></canvas>
+            </div>
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--blue);"></div>
+                    <span>Download (Mbps)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--purple);"></div>
+                    <span>Upload (Mbps)</span>
+                </div>
             </div>
         </div>
 

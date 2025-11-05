@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
   procps \
   nginx \
   python3-websockets \
+  speedtest-cli \
   && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
