@@ -1,0 +1,14 @@
+[Unit]
+Description=Network Monitor Daemon (Docker - SQLite)
+After=network-monitor-container.service
+Requires=network-monitor-container.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+ExecStart=/usr/bin/docker exec network-monitor python3 /app/monitor.py 5 12
+ExecStop=/usr/bin/docker exec network-monitor pkill -f monitor.py
+
+[Install]
+WantedBy=multi-user.target

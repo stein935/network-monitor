@@ -1,0 +1,14 @@
+[Unit]
+Description=Network Monitor Web Server (Docker)
+After=network-monitor-daemon.service
+Requires=network-monitor-container.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+ExecStart=/usr/bin/docker exec network-monitor /bin/bash /app/start_services.sh
+ExecStop=/usr/bin/docker exec network-monitor /bin/bash -c "nginx -s quit; pkill -f serve.py"
+
+[Install]
+WantedBy=multi-user.target

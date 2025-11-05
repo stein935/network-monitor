@@ -184,16 +184,25 @@ endif
 # Full rebuild for production (use on Pi after pull)
 rebuild-prod:
 	@echo "🏗️  Rebuilding for production..."
+	@echo "📋 Installing systemd services..."
+	sudo cp systemd/*.service /etc/systemd/system/
+	sudo systemctl daemon-reload
+	@echo "🛑 Stopping existing services..."
+	sudo systemctl stop network-monitor-server.service || true
+	sudo systemctl stop network-monitor-daemon.service || true
+	sudo systemctl stop network-monitor-container.service || true
+	@echo "🐳 Rebuilding Docker container..."
 	docker compose down || true
 	docker compose build --no-cache
-	docker compose up -d
+	@echo "🚀 Starting services via systemd..."
+	sudo systemctl enable network-monitor-container.service
+	sudo systemctl enable network-monitor-daemon.service
+	sudo systemctl enable network-monitor-server.service
+	sudo systemctl start network-monitor-container.service
 	@sleep 5
-	@echo "📊 Starting monitor..."
-	docker exec -d network-monitor python3 /app/monitor.py 5 12
-	@echo "⏳ Waiting 30 seconds for initial data..."
+	sudo systemctl start network-monitor-daemon.service
 	@sleep 30
-	@echo "🌐 Starting web services..."
-	docker exec -d network-monitor /bin/bash /app/start_services.sh
+	sudo systemctl start network-monitor-server.service
 	@sleep 3
 	@echo "✅ Production deployment complete!"
 	@make status
@@ -202,5 +211,12 @@ rebuild-prod:
 update-prod:
 	@echo "⚡ Quick production update..."
 	git pull origin main
-	@make dev
+	@echo "📋 Updating systemd services..."
+	sudo cp systemd/*.service /etc/systemd/system/
+	sudo systemctl daemon-reload
+	@echo "🔄 Restarting services..."
+	sudo systemctl restart network-monitor-server.service
+	sudo systemctl restart network-monitor-daemon.service
+	@sleep 3
 	@echo "✅ Production updated!"
+	@make status
