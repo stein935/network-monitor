@@ -352,19 +352,6 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         # Create initial filename for display
         initial_filename = f"monitor_{initial_date.replace('-', '')}_{initial_hour:02d}.csv"
 
-        # Group hours by date
-        files_by_date = {}
-        for date, hour, count in available_hours:
-            if date not in files_by_date:
-                files_by_date[date] = []
-            hour_int = int(hour)
-            filename = f"monitor_{date.replace('-', '')}_{hour_int:02d}.csv"
-            formatted_time = f"{hour_int:02d}:00 - {hour_int:02d}:59"
-            files_by_date[date].append((filename, date, hour_int, formatted_time, count))
-
-        # Get navigation URLs for initial view
-        prev_url, next_url = self._get_navigation_urls(initial_date, initial_hour)
-
         # Build the HTML
         html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -488,32 +475,6 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 </div>
             </div>
         </div>
-
-        <!-- Available Data Section -->
-        <div class="data-section">
-'''
-
-        # Add date groups
-        for date_str in sorted(files_by_date.keys(), reverse=True):
-            html += f'''            <div class="date-group">
-                <div class="date-group-title">Date: {date_str}</div>
-                <div class="data-list">
-'''
-            for filename, date, hour, formatted_time, count in files_by_date[date_str]:
-                # Check if this is the active (initial) item
-                is_active = (date == initial_date and hour == initial_hour)
-                active_class = ' active' if is_active else ''
-
-                html += f'''                    <div class="data-item{active_class}" data-date="{date}" data-hour="{hour}" onclick="loadDataItem('{date}', {hour}, this)">
-                        <span class="data-filename">{filename}</span>
-                        <span class="data-meta">{formatted_time} ({count} entries)</span>
-                    </div>
-'''
-            html += '''                </div>
-            </div>
-'''
-
-        html += '''        </div>
     </div>
 
     <script src="/static/dashboard.js"></script>

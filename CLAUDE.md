@@ -485,7 +485,6 @@ The dashboard combines both monitoring types in one view:
 - **Top section:** Network monitoring chart (response time + success rate)
 - **Middle section:** Speed test statistics (download, upload, server, last test)
 - **Bottom section:** Speed test chart (download + upload over time)
-- **Data list:** Reference only - navigation is time-based
 
 ### API Endpoints
 

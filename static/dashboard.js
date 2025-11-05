@@ -686,8 +686,6 @@ function updateChartWithData(csv) {
     chart.update();
 }
 
-// Data item list at bottom is for reference only - navigation is time-based
-
 // WebSocket connection
 function connectWebSocket() {
     if (ws) return; // Already connected
