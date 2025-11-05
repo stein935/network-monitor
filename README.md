@@ -63,6 +63,8 @@ Browser → nginx:8080 (gzip, reverse proxy)
 - **Live indicator**: Shows when viewing current data
 - **Fallback**: HTTP polling (60s network, 5min speed) if WebSocket fails
 - **Historical data**: Time-based navigation for viewing past data
+- **Date range display**: Shows exact time window being viewed
+- **Go Live button**: Quick return to live view from historical data (appears when navigating to past)
 
 ### Data Storage
 - **SQLite database**: `logs/network_monitor.db`
@@ -77,6 +79,8 @@ Browser → nginx:8080 (gzip, reverse proxy)
 - **Speed test chart**: Download + upload bandwidth over time
 - **Stats display**: Latest speed test results (download, upload, server)
 - **Time-based navigation**: Previous/Next buttons for both charts
+- **Date range indicators**: Display showing current time window
+- **Go Live button**: One-click return to live data (red dot indicator)
 - **Gruvbox theme**: Dark, easy on eyes
 - **Color coding**: Green (100%), Orange (partial), Red (fail)
 

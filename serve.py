@@ -397,13 +397,19 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     <div class="section-title">🌐 Network Monitoring</div>
                     <div class="section-subtitle">Response time and success rate tracking</div>
                 </div>
-                <div class="network-nav-group">
-                    <button class="network-nav-button" id="networkPrevBtn" onclick="goNetworkPrevious()">
-                        <span>←</span>
-                    </button>
-                    <button class="network-nav-button" id="networkNextBtn" onclick="goNetworkNext()">
-                        <span>→</span>
-                    </button>
+                <div class="nav-controls">
+                    <div class="date-range" id="networkDateRange">--</div>
+                    <div class="network-nav-group">
+                        <button class="network-nav-button" id="networkPrevBtn" onclick="goNetworkPrevious()">
+                            <span>←</span>
+                        </button>
+                        <button class="network-nav-button" id="networkNextBtn" onclick="goNetworkNext()">
+                            <span>→</span>
+                        </button>
+                        <button class="network-go-live-button" id="networkGoLiveBtn" onclick="goNetworkLive()" title="Return to live data">
+                            <div class="nav-button-dot"></div>
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="chart-wrapper">
@@ -428,13 +434,19 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     <div class="section-title">⚡ Internet Speed Tests</div>
                     <div class="section-subtitle">Tests run every 15 minutes</div>
                 </div>
-                <div class="speed-nav-group">
-                    <button class="speed-nav-button" id="speedPrevBtn" onclick="goSpeedPrevious()">
-                        <span>←</span>
-                    </button>
-                    <button class="speed-nav-button" id="speedNextBtn" onclick="goSpeedNext()">
-                        <span>→</span>
-                    </button>
+                <div class="nav-controls">
+                    <div class="date-range" id="speedDateRange">--</div>
+                    <div class="speed-nav-group">
+                        <button class="speed-nav-button" id="speedPrevBtn" onclick="goSpeedPrevious()">
+                            <span>←</span>
+                        </button>
+                        <button class="speed-nav-button" id="speedNextBtn" onclick="goSpeedNext()">
+                            <span>→</span>
+                        </button>
+                        <button class="speed-go-live-button" id="speedGoLiveBtn" onclick="goSpeedLive()" title="Return to live data">
+                            <div class="nav-button-dot"></div>
+                        </button>
+                    </div>
                 </div>
             </div>
 

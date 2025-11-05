@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load speed test data
     loadSpeedTestData();
     startSpeedTestPolling();
+
+    // Initialize Go Live button visibility
+    updateNetworkGoLiveButton();
+    updateSpeedGoLiveButton();
 });
 
 // Initialize Chart.js
@@ -342,6 +346,9 @@ function initializeSpeedTestChart() {
 
 // Load speed test data
 function loadSpeedTestData() {
+    // Update date range display
+    updateSpeedDateRange();
+
     // Load latest for stats (always show latest)
     fetch('/api/speed-tests/latest')
         .then(response => response.ok ? response.json() : null)
@@ -488,6 +495,7 @@ function updateSpeedNavButtons(tests) {
 function goSpeedPrevious() {
     speedTestHoursOffset -= 12; // Go back 12 hours
     loadSpeedTestData();
+    updateSpeedGoLiveButton();
 }
 
 // Navigate to next 12-hour window (newer data)
@@ -497,6 +505,7 @@ function goSpeedNext() {
         speedTestHoursOffset = 0; // Don't go beyond current time
     }
     loadSpeedTestData();
+    updateSpeedGoLiveButton();
 }
 
 // Update network monitoring navigation button states
@@ -540,6 +549,7 @@ function goNetworkPrevious() {
     }
 
     loadNetworkData();
+    updateNetworkGoLiveButton();
 }
 
 // Navigate to next 1-hour window (newer data)
@@ -555,6 +565,106 @@ function goNetworkNext() {
     }
 
     loadNetworkData();
+    updateNetworkGoLiveButton();
+}
+
+// Go back to live view for network monitoring
+function goNetworkLive() {
+    networkHoursOffset = 0;
+
+    // Reconnect WebSocket for live network data
+    connectWebSocket();
+
+    // Reload network data
+    loadNetworkData();
+
+    // Update button visibility
+    updateNetworkGoLiveButton();
+}
+
+// Go back to live view for speed tests
+function goSpeedLive() {
+    speedTestHoursOffset = 0;
+
+    // Reload speed test data
+    loadSpeedTestData();
+
+    // Update button visibility
+    updateSpeedGoLiveButton();
+}
+
+// Update Network Go Live button visibility
+function updateNetworkGoLiveButton() {
+    const goLiveBtn = document.getElementById('networkGoLiveBtn');
+    if (!goLiveBtn) return;
+
+    // Show button only when not on live view
+    if (networkHoursOffset === 0) {
+        goLiveBtn.style.display = 'none';
+    } else {
+        goLiveBtn.style.display = 'flex';
+    }
+}
+
+// Update Speed Test Go Live button visibility
+function updateSpeedGoLiveButton() {
+    const goLiveBtn = document.getElementById('speedGoLiveBtn');
+    if (!goLiveBtn) return;
+
+    // Show button only when not on live view
+    if (speedTestHoursOffset === 0) {
+        goLiveBtn.style.display = 'none';
+    } else {
+        goLiveBtn.style.display = 'flex';
+    }
+}
+
+// Format date range display
+function formatDateRange(startTime, endTime) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const startMonth = months[startTime.getMonth()];
+    const startDay = startTime.getDate();
+    const startYear = startTime.getFullYear();
+    const startHour = String(startTime.getHours()).padStart(2, '0');
+    const startMin = String(startTime.getMinutes()).padStart(2, '0');
+
+    const endMonth = months[endTime.getMonth()];
+    const endDay = endTime.getDate();
+    const endYear = endTime.getFullYear();
+    const endHour = String(endTime.getHours()).padStart(2, '0');
+    const endMin = String(endTime.getMinutes()).padStart(2, '0');
+
+    // Check if same day
+    if (startMonth === endMonth && startDay === endDay && startYear === endYear) {
+        return `${startMonth} ${startDay}, ${startYear} ${startHour}:${startMin} ←→ ${endHour}:${endMin}`;
+    } else {
+        return `${startMonth} ${startDay}, ${startYear} ${startHour}:${startMin} ←→ ${endMonth} ${endDay}, ${endYear} ${endHour}:${endMin}`;
+    }
+}
+
+// Update network date range display
+function updateNetworkDateRange() {
+    const now = new Date();
+    const endTime = new Date(now.getTime() + (networkHoursOffset * 60 * 60 * 1000));
+    const startTime = new Date(endTime.getTime() - (1 * 60 * 60 * 1000)); // 1 hour window
+
+    const rangeEl = document.getElementById('networkDateRange');
+    if (rangeEl) {
+        rangeEl.textContent = formatDateRange(startTime, endTime);
+    }
+}
+
+// Update speed test date range display
+function updateSpeedDateRange() {
+    const now = new Date();
+    const endTime = new Date(now.getTime() + (speedTestHoursOffset * 60 * 60 * 1000));
+    const startTime = new Date(endTime.getTime() - (12 * 60 * 60 * 1000)); // 12 hour window
+
+    const rangeEl = document.getElementById('speedDateRange');
+    if (rangeEl) {
+        rangeEl.textContent = formatDateRange(startTime, endTime);
+    }
 }
 
 // Parse CSV data
@@ -578,6 +688,9 @@ function parseCSV(csv) {
 
 // Load network monitoring data
 function loadNetworkData() {
+    // Update date range display
+    updateNetworkDateRange();
+
     // Calculate time range based on offset (1-hour window)
     const now = new Date();
     const endTime = new Date(now.getTime() + (networkHoursOffset * 60 * 60 * 1000));

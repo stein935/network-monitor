@@ -118,6 +118,50 @@ body {
     animation: pulse 2s ease-in-out infinite;
 }
 
+.network-go-live-button,
+.speed-go-live-button {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-soft);
+    border: 2px solid var(--gray);
+    color: var(--fg);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Fira Code', monospace;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 44px;
+}
+
+.network-go-live-button:hover,
+.speed-go-live-button:hover {
+    background: var(--yellow);
+    border-color: var(--orange);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(60, 56, 54, 0.15);
+}
+
+.network-go-live-button:hover .nav-button-dot,
+.speed-go-live-button:hover .nav-button-dot {
+    background: var(--bg);
+}
+
+.network-go-live-button:active,
+.speed-go-live-button:active {
+    transform: translateY(0);
+}
+
+.nav-button-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--red);
+    border-radius: 50%;
+    transition: background 0.2s ease;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
@@ -189,6 +233,23 @@ body {
 .nav-group {
     display: flex;
     gap: 12px;
+}
+
+.nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.date-range {
+    color: var(--fg-dim);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 12px;
+    background: var(--bg-soft);
+    border: 2px solid var(--gray-light);
+    border-radius: 4px;
+    white-space: nowrap;
 }
 
 /* Speed Test Section */
