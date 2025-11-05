@@ -14,11 +14,7 @@ services:
     cap_add:
       - NET_RAW
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: "0.4" # Maximum 40% of one CPU core (leaving 60% for Pi-hole + system)
-          memory: 192M # Maximum 192MB RAM (leaving ~320MB for Pi-hole + system)
-        reservations:
-          cpus: "0.15" # Guaranteed minimum 15% CPU
-          memory: 96M # Guaranteed minimum 96MB RAM
+    # Resource limits (Docker Compose standalone syntax)
+    mem_limit: 192m # Maximum 192MB RAM (leaving ~320MB for Pi-hole + system)
+    mem_reservation: 96m # Soft limit / preferred usage
+    cpus: 0.4 # Maximum 40% of one CPU core (leaving 60% for Pi-hole + system)
