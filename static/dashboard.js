@@ -341,7 +341,8 @@ function connectWebSocket() {
     // Stop polling if it's running (we're switching to WebSocket)
     stopPolling();
 
-    const wsUrl = `ws://${location.hostname}:8081`;
+    // Use /ws path through nginx proxy (location.host includes port)
+    const wsUrl = `ws://${location.host}/ws`;
     updateWebSocketStatus('connecting');
 
     ws = new WebSocket(wsUrl);
