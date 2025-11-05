@@ -66,7 +66,7 @@ start:
 	docker compose up -d
 	@sleep 3
 	@echo "📊 Starting monitor (generates data)..."
-	docker exec -d network-monitor python3 /app/monitor.py 1 60
+	docker exec -d network-monitor python3 /app/monitor.py 5 12
 	@echo "⏳ Waiting 30 seconds for initial data..."
 	@sleep 30
 	@echo "🌐 Starting web services..."

@@ -1,19 +1,12 @@
 FROM debian:bookworm-slim
 
-# Install system dependencies including Python, nginx, and pre-built packages
-# Using Debian base with system packages avoids lengthy compilation on ARM devices
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
   python3 \
-  python3-pip \
-  bc \
   iputils-ping \
   curl \
   procps \
-  cron \
   nginx \
-  python3-pandas \
-  python3-plotly \
-  python3-numpy \
   python3-websockets \
   && rm -rf /var/lib/apt/lists/*
 
