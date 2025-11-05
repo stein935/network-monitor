@@ -96,21 +96,35 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     db = None
 
     def do_GET(self):
+        # Serve favicon
+        if self.path == "/favicon.ico" or self.path == "/favicon.svg":
+            # Serve inline SVG emoji favicon
+            svg_content = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🌐</text></svg>"""
+            content = svg_content.encode("utf-8")
+
+            self.send_response(200)
+            self.send_header("Content-type", "image/svg+xml")
+            self.send_header("Content-Length", len(content))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(content)
+            return
+
         # Serve static files (CSS, JS)
         if self.path.startswith("/static/"):
             try:
                 static_path = Path(__file__).parent / self.path[1:]  # Remove leading /
                 if static_path.exists() and static_path.is_file():
-                    with open(static_path, 'rb') as f:
+                    with open(static_path, "rb") as f:
                         content = f.read()
 
                     # Determine content type
-                    if self.path.endswith('.css'):
-                        content_type = 'text/css'
-                    elif self.path.endswith('.js'):
-                        content_type = 'application/javascript'
+                    if self.path.endswith(".css"):
+                        content_type = "text/css"
+                    elif self.path.endswith(".js"):
+                        content_type = "application/javascript"
                     else:
-                        content_type = 'text/plain'
+                        content_type = "text/plain"
 
                     self.send_response(200)
                     self.send_header("Content-type", content_type)
@@ -146,21 +160,30 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 earliest = self.db.get_earliest_log()
 
                 if earliest:
-                    timestamp, status, response_time, success_count, total_count, failed_count = earliest
+                    (
+                        timestamp,
+                        status,
+                        response_time,
+                        success_count,
+                        total_count,
+                        failed_count,
+                    ) = earliest
                     data = {
                         "timestamp": timestamp,
                         "status": status,
                         "response_time": response_time,
                         "success_count": success_count,
                         "total_count": total_count,
-                        "failed_count": failed_count
+                        "failed_count": failed_count,
                     }
                     content = json.dumps(data).encode("utf-8")
 
                     self.send_response(200)
                     self.send_header("Content-type", "application/json")
                     self.send_header("Content-Length", len(content))
-                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header(
+                        "Cache-Control", "no-cache, no-store, must-revalidate"
+                    )
                     self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
                     self.wfile.write(content)
@@ -175,7 +198,15 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 latest = self.db.get_latest_speed_test()
 
                 if latest:
-                    timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country = latest
+                    (
+                        timestamp,
+                        download_mbps,
+                        upload_mbps,
+                        ping_ms,
+                        server_host,
+                        server_name,
+                        server_country,
+                    ) = latest
                     data = {
                         "timestamp": timestamp,
                         "download_mbps": round(download_mbps, 2),
@@ -183,14 +214,16 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                         "ping_ms": round(ping_ms, 2) if ping_ms else None,
                         "server_host": server_host,
                         "server_name": server_name,
-                        "server_country": server_country
+                        "server_country": server_country,
                     }
                     content = json.dumps(data).encode("utf-8")
 
                     self.send_response(200)
                     self.send_header("Content-type", "application/json")
                     self.send_header("Content-Length", len(content))
-                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header(
+                        "Cache-Control", "no-cache, no-store, must-revalidate"
+                    )
                     self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
                     self.wfile.write(content)
@@ -204,12 +237,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             try:
                 # Parse query parameters
                 from urllib.parse import urlparse, parse_qs
+
                 parsed = urlparse(self.path)
                 params = parse_qs(parsed.query)
 
                 # Get start_time and end_time from query params
-                start_time = params.get('start_time', [None])[0]
-                end_time = params.get('end_time', [None])[0]
+                start_time = params.get("start_time", [None])[0]
+                end_time = params.get("end_time", [None])[0]
 
                 # Use time range if provided, otherwise default to last 24 hours
                 if start_time or end_time:
@@ -219,16 +253,26 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
                 results = []
                 for test in tests:
-                    timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country = test
-                    results.append({
-                        "timestamp": timestamp,
-                        "download_mbps": round(download_mbps, 2),
-                        "upload_mbps": round(upload_mbps, 2),
-                        "ping_ms": round(ping_ms, 2) if ping_ms else None,
-                        "server_host": server_host,
-                        "server_name": server_name,
-                        "server_country": server_country
-                    })
+                    (
+                        timestamp,
+                        download_mbps,
+                        upload_mbps,
+                        ping_ms,
+                        server_host,
+                        server_name,
+                        server_country,
+                    ) = test
+                    results.append(
+                        {
+                            "timestamp": timestamp,
+                            "download_mbps": round(download_mbps, 2),
+                            "upload_mbps": round(upload_mbps, 2),
+                            "ping_ms": round(ping_ms, 2) if ping_ms else None,
+                            "server_host": server_host,
+                            "server_name": server_name,
+                            "server_country": server_country,
+                        }
+                    )
 
                 content = json.dumps(results).encode("utf-8")
 
@@ -247,31 +291,36 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             try:
                 # Parse query parameters for time range support
                 from urllib.parse import urlparse, parse_qs
+
                 parsed = urlparse(self.path)
                 params = parse_qs(parsed.query)
 
                 # Get start_time and end_time from query params
-                start_time = params.get('start_time', [None])[0]
-                end_time = params.get('end_time', [None])[0]
+                start_time = params.get("start_time", [None])[0]
+                end_time = params.get("end_time", [None])[0]
 
                 # Use time range if provided, otherwise use legacy date/hour format
                 if start_time and end_time:
                     csv_content = self.db.export_to_csv_range(start_time, end_time)
                 else:
                     # Legacy path format: /csv/YYYY-MM-DD/HH
-                    csv_path = urllib.parse.unquote(parsed.path[5:])  # Remove /csv/ prefix
+                    csv_path = urllib.parse.unquote(
+                        parsed.path[5:]
+                    )  # Remove /csv/ prefix
 
                     # Parse date and hour from path
                     if "/" not in csv_path:
                         self.send_error(
-                            400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH or /csv?start_time=...&end_time=..."
+                            400,
+                            "Invalid path format. Expected: /csv/YYYY-MM-DD/HH or /csv?start_time=...&end_time=...",
                         )
                         return
 
                     parts = csv_path.split("/")
                     if len(parts) < 2:
                         self.send_error(
-                            400, "Invalid path format. Expected: /csv/YYYY-MM-DD/HH or /csv?start_time=...&end_time=..."
+                            400,
+                            "Invalid path format. Expected: /csv/YYYY-MM-DD/HH or /csv?start_time=...&end_time=...",
                         )
                         return
 
@@ -313,12 +362,13 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         available_hours = self.db.get_available_hours()
 
         if not available_hours:
-            return '''<!DOCTYPE html>
+            return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Monitoring Dashboard</title>
+    <title>./network-monitor</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
@@ -337,7 +387,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         </div>
     </div>
 </body>
-</html>'''
+</html>"""
 
         # Get the most recent entry (first in list since sorted DESC)
         initial_date, initial_hour_str, _ = available_hours[0]
@@ -347,18 +397,24 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         now = datetime.now()
         current_date_str = now.strftime("%Y-%m-%d")
         current_hour_num = now.hour
-        is_current_hour = (initial_date == current_date_str and initial_hour == current_hour_num)
+        is_current_hour = (
+            initial_date == current_date_str and initial_hour == current_hour_num
+        )
 
         # Create initial filename for display
-        initial_filename = f"monitor_{initial_date.replace('-', '')}_{initial_hour:02d}.csv"
+        initial_filename = (
+            f"monitor_{initial_date.replace('-', '')}_{initial_hour:02d}.csv"
+        )
 
         # Build the HTML
-        html = f'''<!DOCTYPE html>
+        html = (
+            f'''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Monitoring Dashboard</title>
+    <title>./network-monitor</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/dashboard.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -378,7 +434,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 </div>
                 <div class="status-right">
                     <div class="status-indicators">
-                        <div class="live-indicator" style="display: {'flex' if is_current_hour else 'none'};">
+                        <div class="live-indicator" style="display: {"flex" if is_current_hour else "none"};">
                             <div class="live-dot"></div>
                             <span>Live</span>
                         </div>
@@ -492,12 +548,19 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     <script src="/static/dashboard.js"></script>
     <script>
         // Initialize with current data
-        const INITIAL_DATE = "''' + initial_date + '''";
-        const INITIAL_HOUR = ''' + str(initial_hour) + ''';
-        const INITIAL_IS_CURRENT_HOUR = ''' + ('true' if is_current_hour else 'false') + ''';
+        const INITIAL_DATE = "'''
+            + initial_date
+            + """";
+        const INITIAL_HOUR = """
+            + str(initial_hour)
+            + """;
+        const INITIAL_IS_CURRENT_HOUR = """
+            + ("true" if is_current_hour else "false")
+            + """;
     </script>
 </body>
-</html>'''
+</html>"""
+        )
 
         return html
 
