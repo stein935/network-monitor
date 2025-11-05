@@ -37,8 +37,8 @@ dev:
 	@docker exec network-monitor chmod +x /app/start_services.sh
 	@echo "🔄 Stopping services..."
 	@docker exec network-monitor pkill -f serve.py 2>/dev/null || true
-	@docker exec network-monitor nginx -s quit 2>/dev/null || true
-	@sleep 2
+	@docker exec network-monitor pkill nginx 2>/dev/null || true
+	@sleep 3
 	@echo "🚀 Starting nginx..."
 	@docker exec network-monitor nginx -t
 	@docker exec network-monitor nginx
@@ -51,7 +51,32 @@ dev:
 	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -q 8090 && echo "  ✅ Port 8090 listening" || echo "  ⚠️  Port 8090 not listening"
 	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -q 8081 && echo "  ✅ Port 8081 listening" || echo "  ⚠️  Port 8081 not listening"
 	@echo "✅ Dev environment updated!"
-	@echo "🌐 Open http://localhost:8080"
+	@echo "🌐 Refreshing http://localhost:8080..."
+	@osascript -e 'tell application "Google Chrome"' \
+		-e '  set found to false' \
+		-e '  set targetURL to "localhost:8080"' \
+		-e '  repeat with w in windows' \
+		-e '    set tabIndex to 1' \
+		-e '    repeat with t in tabs of w' \
+		-e '      if URL of t contains targetURL then' \
+		-e '        set found to true' \
+		-e '        set index of w to 1' \
+		-e '        set active tab index of w to tabIndex' \
+		-e '        activate' \
+		-e '        tell application "System Events"' \
+		-e '          keystroke "r" using command down' \
+		-e '        end tell' \
+		-e '        exit repeat' \
+		-e '      end if' \
+		-e '      set tabIndex to tabIndex + 1' \
+		-e '    end repeat' \
+		-e '    if found then exit repeat' \
+		-e '  end repeat' \
+		-e '  if not found then' \
+		-e '    activate' \
+		-e '    make new tab at end of tabs of front window with properties {URL:"http://localhost:8080"}' \
+		-e '  end if' \
+		-e 'end tell' 2>/dev/null || open -a "Google Chrome" http://localhost:8080
 
 # Build from scratch
 build:
