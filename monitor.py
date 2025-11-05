@@ -18,7 +18,7 @@ from db import NetworkMonitorDB
 
 
 class NetworkMonitor:
-    def __init__(self, frequency=1, sample_size=5, log_retention_days=10):
+    def __init__(self, frequency=1, sample_size=5, log_retention_days=30):
         self.frequency = frequency
         self.sample_size = sample_size
         self.log_retention_days = log_retention_days
