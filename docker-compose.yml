@@ -13,4 +13,12 @@ services:
     privileged: true # Required for ping
     cap_add:
       - NET_RAW
-      - NET_ADMIN # Guaranteed minimum memory
+      - NET_ADMIN
+    deploy:
+      resources:
+        limits:
+          cpus: "0.4" # Maximum 40% of one CPU core (leaving 60% for Pi-hole + system)
+          memory: 192M # Maximum 192MB RAM (leaving ~320MB for Pi-hole + system)
+        reservations:
+          cpus: "0.15" # Guaranteed minimum 15% CPU
+          memory: 96M # Guaranteed minimum 96MB RAM

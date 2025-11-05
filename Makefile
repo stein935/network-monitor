@@ -165,7 +165,7 @@ deploy:
 	git push origin main
 ifdef PI_HOST
 	@echo "📥 Deploying to $(PI_HOST)..."
-	ssh $(PI_HOST) 'cd ~/network-monitor && git pull origin main && make rebuild-prod'
+	ssh -t $(PI_HOST) 'cd ~/network-monitor && git pull origin main && make rebuild-prod'
 	@echo "✅ Deployment complete!"
 	@echo "🌐 Visit http://$(PI_HOST):8080"
 else
@@ -181,12 +181,19 @@ else
 	@echo "  make deploy"
 endif
 
-# Full rebuild for production (use on Pi after pull)
-rebuild-prod:
-	@echo "🏗️  Rebuilding for production..."
+# Install systemd services (requires sudo, run once)
+install-services:
 	@echo "📋 Installing systemd services..."
 	sudo cp systemd/*.service /etc/systemd/system/
 	sudo systemctl daemon-reload
+	sudo systemctl enable network-monitor-container.service
+	sudo systemctl enable network-monitor-daemon.service
+	sudo systemctl enable network-monitor-server.service
+	@echo "✅ Services installed!"
+
+# Full rebuild for production (use on Pi after pull)
+rebuild-prod: install-services
+	@echo "🏗️  Rebuilding for production..."
 	@echo "🛑 Stopping existing services..."
 	sudo systemctl stop network-monitor-server.service || true
 	sudo systemctl stop network-monitor-daemon.service || true
@@ -195,9 +202,6 @@ rebuild-prod:
 	docker compose down || true
 	docker compose build --no-cache
 	@echo "🚀 Starting services via systemd..."
-	sudo systemctl enable network-monitor-container.service
-	sudo systemctl enable network-monitor-daemon.service
-	sudo systemctl enable network-monitor-server.service
 	sudo systemctl start network-monitor-container.service
 	@sleep 5
 	sudo systemctl start network-monitor-daemon.service
