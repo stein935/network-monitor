@@ -36,7 +36,7 @@ EXPOSE 8080 8081
 ENV PYTHONUNBUFFERED=1
 
 # Make scripts executable
-RUN chmod +x /app/start_services.sh /app/generate_static.sh
+RUN chmod +x /app/start_services.sh
 
 # Keep container running
 CMD ["tail", "-f", "/dev/null"]
