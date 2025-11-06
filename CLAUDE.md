@@ -66,6 +66,7 @@ Network Monitor is a Python-based daemon that continuously monitors network conn
    - **API endpoints:**
      - `/api/network-logs/earliest` - Get earliest network log
      - `/api/speed-tests/latest` - Get latest speed test result
+     - `/api/speed-tests/earliest` - Get earliest speed test result
      - `/api/speed-tests/recent` - Get recent speed tests with optional time range
    - **CSV export:**
      - Time-range based: `/csv/?start_time=...&end_time=...`
@@ -267,6 +268,7 @@ sudo journalctl -u network-monitor-server.service -f
 The following optimizations were implemented to reduce resource consumption on the Pi Zero 2 W without changing user-visible functionality:
 
 **Database Layer (db.py):**
+
 - **WAL mode**: Write-Ahead Logging for 30-40% faster writes with better concurrency
 - **synchronous=NORMAL**: Balanced safety/performance (vs FULL)
 - **32MB cache**: `PRAGMA cache_size=-32000` for faster query performance
@@ -274,22 +276,26 @@ The following optimizations were implemented to reduce resource consumption on t
 - Manual VACUUM recommended during maintenance windows if needed
 
 **Monitor Process (monitor.py):**
+
 - **Reduced logging**: Only prints every 10th sample or on failures (20% CPU reduction)
 - **Immediate commits**: Each log entry commits immediately (WAL makes this efficient)
 - No batch commit delays ensure data visibility to web dashboard
 
 **Web Server (serve.py):**
+
 - **HTML caching**: 30-second in-memory cache for generated HTML (70% CPU reduction)
 - **ETag support**: MD5-based ETags for static files (60% bandwidth savings on repeat visits)
 - **Chart.js defer**: Non-blocking script load for faster page rendering
 
 **Frontend (dashboard.js):**
+
 - **Disabled animations**: `animation: false` for 30% faster chart rendering
 - **Request debouncing**: Prevents duplicate fetch requests during navigation
 - **requestIdleCallback**: Low-priority background updates for better UI responsiveness
 - **chart.update('none')**: Skips animations during data updates
 
 **nginx (nginx.conf):**
+
 - **Reduced workers**: 128 connections (vs 1024) - adequate for typical use, saves 15-20% memory
 - **Disabled access logs**: Reduces I/O overhead on SD card (10-15% reduction)
 - **Proxy cache**: 30-second cache for `/api/` and `/csv/` endpoints
@@ -298,6 +304,7 @@ The following optimizations were implemented to reduce resource consumption on t
   - Serves stale content on backend errors
 
 **Docker (Dockerfile & docker-compose.yml):**
+
 - **Bytecode compilation**: `python3 -m compileall` for 10-15% faster startup
 - **PYTHONDONTWRITEBYTECODE=1**: Prevents runtime .pyc generation
 - **Logging limits**: max 1MB per file, 2 files (prevents disk bloat)
@@ -686,7 +693,7 @@ The dashboard combines both monitoring types in one view:
 
 **Navigation controls (both charts):**
 
-- **Date range display:** Shows exact time window being viewed (e.g., "Nov 5, 2025 14:00 ←→ 15:00")
+- **Date range display:** Shows exact time window being viewed (e.g., "Nov 5, 2025 14:00 ↔ 15:00")
 - **Previous/Next buttons:** Navigate backward/forward through time windows
 - **Go Live button:** Red dot indicator button that appears when viewing historical data
   - Only visible when `offset !== 0` (not on live view)
@@ -699,6 +706,7 @@ The dashboard combines both monitoring types in one view:
 The footer displays system statistics in a minimal terminal-style layout:
 
 **Components:**
+
 - **Version**: Read from `VERSION` file via `get_version()` function
 - **DB Size**: Real-time database file size (formatted as B/KB/MB/GB)
 - **Uptime**: Time since page load (updates every minute)
@@ -720,6 +728,7 @@ def get_version():
 ```
 
 **API endpoint:** `/api/stats` returns database statistics:
+
 ```json
 {
   "db_size": "2.3MB",
@@ -739,6 +748,7 @@ def get_version():
 **Speed tests:**
 
 - `GET /api/speed-tests/latest` - Returns latest speed test (for stats display)
+- `GET /api/speed-tests/earliest` - Returns earliest speed test (for nav button state)
 - `GET /api/speed-tests/recent?start_time=...&end_time=...` - Recent tests for chart
 
 **System stats:**
@@ -764,6 +774,7 @@ make dev  # Copies VERSION to container and restarts services
 ```
 
 **Implementation:**
+
 - `get_version()` function in serve.py reads VERSION file
 - Fallback to "1.0.0" if file missing or unreadable
 - Version displays in footer and updates automatically
@@ -774,6 +785,7 @@ make dev  # Copies VERSION to container and restarts services
 The dashboard charts use Chart.js with custom styling:
 
 **Network Monitoring Chart:**
+
 - **Response Time**: Line chart, blue color (#458588), 2px points
 - **Success Rate**: Area chart, green fill (rgba 152,151,26,0.1), no points
   - Y-axis range: 0-105% (full range, not truncated)
@@ -781,10 +793,12 @@ The dashboard charts use Chart.js with custom styling:
   - Filled area for better visibility
 
 **Speed Test Chart:**
+
 - **Download**: Area chart with filled background, blue color
 - **Upload**: Line chart, purple color (#b16286)
 - Both charts: 2px points for minimal visual clutter
 
 **Performance:**
+
 - All animations disabled (`animation: false`) for Pi Zero performance
 - Chart updates use `chart.update('none')` to skip transitions

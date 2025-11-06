@@ -58,6 +58,7 @@ function initializeChart() {
           pointBorderColor: "#fbf1c7",
           pointBorderWidth: 1,
           yAxisID: "y",
+          fill: true,
         },
         {
           label: "Success Rate (%)",
@@ -234,6 +235,7 @@ function initializeSpeedTestChart() {
           pointBorderColor: "#fbf1c7",
           pointBorderWidth: 1,
           yAxisID: "y1",
+          fill: true,
         },
       ],
     },
@@ -697,9 +699,9 @@ function formatDateRange(startTime, endTime) {
 
   // Check if same day
   if (startMonth === endMonth && startDay === endDay && startYear === endYear) {
-    return `${startMonth} ${startDay}, ${startYear} ${startHour}:${startMin} ←→ ${endHour}:${endMin}`;
+    return `${startMonth} ${startDay}, ${startYear} ${startHour}:${startMin}  ${endHour}:${endMin}`;
   } else {
-    return `${startMonth} ${startDay}, ${startYear} ${startHour}:${startMin} ←→ ${endMonth} ${endDay}, ${endYear} ${endHour}:${endMin}`;
+    return `${startMonth} ${startDay}, ${startYear} ${startHour}:${startMin}  ${endMonth} ${endDay}, ${endYear} ${endHour}:${endMin}`;
   }
 }
 
@@ -980,7 +982,9 @@ function updateFooterStats() {
   // Update uptime
   const uptimeMs = Date.now() - startTime;
   const days = Math.floor(uptimeMs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((uptimeMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const hours = Math.floor(
+    (uptimeMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+  );
   const minutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
 
   let uptimeStr = "";

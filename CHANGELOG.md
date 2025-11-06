@@ -10,7 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [feat] Terminal-style footer with system stats (version, DB size, uptime, copyright, GitHub link)
 - [feat] VERSION file-based version management system with semantic versioning
 - [feat] `/api/stats` endpoint for database statistics (size, log counts)
+- [feat] `/api/speed-tests/earliest` endpoint to get earliest speed test result
 - [feat] Database count methods: `get_log_count()` and `get_speed_test_count()`
+- [feat] Database method: `get_earliest_speed_test()` for navigation button state
 - [feat] Dynamic uptime display in footer (updates every minute)
 - [feat] Date range display showing exact time window being viewed for both network monitoring and speed test charts
 - [feat] "Go Live" button with red dot indicator to quickly return to live view from historical data
@@ -35,6 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [docs] Enhanced CLAUDE.md with Git workflow rules and documentation standards
 
 ### Fixed
+- [bug] Speed test navigation buttons not working due to race condition in debounce logic
+- [bug] Speed test back button incorrectly disabled when historical data available
 - [ui] Server URI overflow in speed test stats box - long server hostnames now truncate with ellipsis and show full text on hover
 - [perf] Disabled chart animations for better performance on Raspberry Pi Zero 2 W
 - [perf] Reduced nginx worker_connections from 1024 to 128 (adequate for typical use)
