@@ -149,6 +149,12 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                         content_type = "text/css"
                     elif self.path.endswith(".js"):
                         content_type = "application/javascript"
+                    elif self.path.endswith(".otf"):
+                        content_type = "font/otf"
+                    elif self.path.endswith(".woff"):
+                        content_type = "font/woff"
+                    elif self.path.endswith(".woff2"):
+                        content_type = "font/woff2"
                     else:
                         content_type = "text/plain"
 
@@ -314,7 +320,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 else:
                     self.send_error(404, "No speed test data available")
             except Exception as e:
-                self.send_error(500, f"Error fetching earliest speed test data: {str(e)}")
+                self.send_error(
+                    500, f"Error fetching earliest speed test data: {str(e)}"
+                )
 
         elif self.path.startswith("/api/speed-tests/recent"):
             # Get recent speed tests with optional time range
@@ -534,7 +542,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
         # Build the HTML
         html = (
-            f'''<!DOCTYPE html>
+            f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -576,7 +584,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         <div class="chart-container">
             <div class="section-header">
                 <div>
-                    <div class="section-title">🌐 Network Monitoring</div>
+                    <div class="section-title"> Network Monitoring</div>
                     <div class="section-subtitle">Response time and success rate tracking</div>
                 </div>
                 <div class="nav-controls">
@@ -613,7 +621,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         <div class="speed-test-container">
             <div class="section-header">
                 <div>
-                    <div class="section-title">⚡ Internet Speed Tests</div>
+                    <div class="section-title"> Internet Speed Tests</div>
                     <div class="section-subtitle">Tests run every 15 minutes</div>
                 </div>
                 <div class="nav-controls">
@@ -674,7 +682,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
         <div class="footer">
             <div class="footer-content">
                 <span class="footer-prompt">$</span>
-                <span class="footer-item">./network-monitor <span id="footerVersion">v'''
+                <span class="footer-item">./network-monitor <span id="footerVersion">v"""
             + version
             + '''</span></span>
                 <span class="footer-separator">•</span>
@@ -684,7 +692,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 <span class="footer-separator">•</span>
                 <span class="footer-item">© 2025</span>
                 <span class="footer-separator">•</span>
-                <a href="https://github.com/stein935/network-monitor" target="_blank" class="footer-link" title="View on GitHub">GitHub ↗</a>
+                <a href="https://github.com/stein935/network-monitor" target="_blank" class="footer-link" title="View on GitHub"> GitHub ↗</a>
             </div>
         </div>
     </div>

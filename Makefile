@@ -93,8 +93,6 @@ start:
 	@sleep 3
 	@echo "📊 Starting monitor (generates data)..."
 	docker exec -d network-monitor python3 /app/monitor.py 5 12
-	@echo "⏳ Waiting 30 seconds for initial data..."
-	@sleep 30
 	@echo "🌐 Starting web services..."
 	docker exec -d network-monitor /bin/bash /app/start_services.sh
 	@sleep 2

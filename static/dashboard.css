@@ -1,4 +1,13 @@
 /* Light Gruvbox Network Monitor Dashboard */
+
+/* Custom Font */
+@font-face {
+    font-family: 'FiraMono Nerd Font';
+    src: url('fonts/FiraMonoNerdFont-Regular.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -24,7 +33,7 @@
 }
 
 body {
-    font-family: 'Fira Code', monospace;
+    font-family: 'FiraMono Nerd Font', 'Fira Code', monospace;
     background: var(--bg);
     color: var(--fg);
     padding: 20px;
@@ -128,7 +137,7 @@ body {
     color: var(--fg);
     padding: 8px 16px;
     border-radius: 4px;
-    font-family: 'Fira Code', monospace;
+    font-family: 'FiraMono Nerd Font', 'Fira Code', monospace;
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
@@ -327,7 +336,7 @@ body {
     color: var(--fg);
     padding: 8px 16px;
     border-radius: 4px;
-    font-family: 'Fira Code', monospace;
+    font-family: 'FiraMono Nerd Font', 'Fira Code', monospace;
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
@@ -365,7 +374,7 @@ body {
     color: var(--fg);
     padding: 8px 16px;
     border-radius: 4px;
-    font-family: 'Fira Code', monospace;
+    font-family: 'FiraMono Nerd Font', 'Fira Code', monospace;
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
@@ -398,7 +407,7 @@ body {
     color: var(--fg);
     padding: 12px 24px;
     border-radius: 4px;
-    font-family: 'Fira Code', monospace;
+    font-family: 'FiraMono Nerd Font', 'Fira Code', monospace;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -466,7 +475,7 @@ body {
     flex-wrap: wrap;
     font-size: 13px;
     color: var(--fg-dim);
-    font-family: 'Fira Code', monospace;
+    font-family: 'FiraMono Nerd Font', 'Fira Code', monospace;
 }
 
 .footer-prompt {

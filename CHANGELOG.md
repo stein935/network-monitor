@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [feat] "Go Live" button with red dot indicator to quickly return to live view from historical data
 - [feat] Dynamic button visibility - Go Live button only appears when viewing historical data (offset != 0)
 - [feat] Auto-reconnect WebSocket when returning to live view via Go Live button
+- [feat] FiraMono Nerd Font integration with self-hosted font file
+- [feat] Font MIME type support for .otf, .woff, .woff2 files
 - [perf] SQLite WAL mode for 30-40% faster writes with better concurrency
 - [perf] 32MB SQLite query cache for improved database performance
 - [perf] nginx proxy cache (30s) for API and CSV endpoints
@@ -32,7 +34,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [ui] Success Rate converted to area chart with filled background for better visibility
 - [ui] Removed point markers from Success Rate line for cleaner visualization
 - [ui] Reduced chart point size from 4px to 2px for less clutter
+- [ui] Replaced Unicode emojis with Nerd Font icons for section titles ( and )
 - [dev] `make dev` now performs hard refresh (Cmd+Shift+R) to bypass browser cache
+- [dev] Removed unnecessary 30-second wait in Makefile start command
 - [style] Improved navigation controls layout with date range display and button grouping
 - [docs] Enhanced CLAUDE.md with Git workflow rules and documentation standards
 
