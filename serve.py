@@ -417,6 +417,114 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error fetching stats: {str(e)}")
 
+        elif self.path == "/api/docker-stats":
+            # Get Docker container resource statistics
+            try:
+                # Run docker stats command for network-monitor container
+                # Use Go template format instead of --format json
+                result = subprocess.run(
+                    ["docker", "stats", "--no-stream", "--format", "{{json .}}", "network-monitor"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if result.returncode == 0 and result.stdout.strip():
+                    # Parse JSON output from docker stats
+                    try:
+                        stats = json.loads(result.stdout.strip())
+                    except json.JSONDecodeError as e:
+                        # JSON parse error - return debug info
+                        data = {
+                            "available": False,
+                            "error": f"JSON parse error: {str(e)}",
+                            "stdout": result.stdout[:200],  # First 200 chars for debugging
+                            "stderr": result.stderr[:200] if result.stderr else ""
+                        }
+                        content = json.dumps(data).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-type", "application/json")
+                        self.send_header("Content-Length", len(content))
+                        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        self.wfile.write(content)
+                        return
+
+                    # Extract and format the data
+                    # CPU percentage (e.g., "45.23%")
+                    cpu_percent = stats.get("CPUPerc", "0%").rstrip("%")
+
+                    # Memory usage (e.g., "125MB / 250MB")
+                    mem_usage = stats.get("MemUsage", "0B / 0B")
+                    mem_parts = mem_usage.split(" / ")
+                    mem_used = mem_parts[0] if len(mem_parts) > 0 else "0B"
+                    mem_total = mem_parts[1] if len(mem_parts) > 1 else "0B"
+                    mem_percent = stats.get("MemPerc", "0%").rstrip("%")
+
+                    # Network I/O (e.g., "12.5MB / 3.2MB")
+                    net_io = stats.get("NetIO", "0B / 0B")
+                    net_parts = net_io.split(" / ")
+                    net_rx = net_parts[0] if len(net_parts) > 0 else "0B"
+                    net_tx = net_parts[1] if len(net_parts) > 1 else "0B"
+
+                    # Block I/O (e.g., "45.2MB / 12.8MB")
+                    block_io = stats.get("BlockIO", "0B / 0B")
+                    block_parts = block_io.split(" / ")
+                    block_read = block_parts[0] if len(block_parts) > 0 else "0B"
+                    block_write = block_parts[1] if len(block_parts) > 1 else "0B"
+
+                    data = {
+                        "cpu_percent": float(cpu_percent),
+                        "memory_used": mem_used,
+                        "memory_total": mem_total,
+                        "memory_percent": float(mem_percent),
+                        "network_rx": net_rx,
+                        "network_tx": net_tx,
+                        "disk_read": block_read,
+                        "disk_write": block_write,
+                        "available": True
+                    }
+                else:
+                    # Docker not available or container not running
+                    data = {
+                        "available": False,
+                        "error": "Container not running or stats unavailable",
+                        "returncode": result.returncode,
+                        "stdout": result.stdout[:200] if result.stdout else "",
+                        "stderr": result.stderr[:200] if result.stderr else ""
+                    }
+
+                content = json.dumps(data).encode("utf-8")
+
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Content-Length", len(content))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content)
+            except subprocess.TimeoutExpired:
+                data = {"available": False, "error": "Docker stats timeout"}
+                content = json.dumps(data).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Content-Length", len(content))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content)
+            except Exception as e:
+                data = {"available": False, "error": str(e)}
+                content = json.dumps(data).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Content-Length", len(content))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content)
+
         elif self.path.startswith("/csv/"):
             # Export CSV from SQLite for dynamic visualization
             try:
@@ -674,6 +782,62 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 <div class="legend-item">
                     <div class="legend-color" style="background: var(--purple);"></div>
                     <span>Upload (Mbps)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Docker Resources Section -->
+        <div class="docker-resources-container">
+            <div class="section-header">
+                <div>
+                    <div class="section-title"> Docker Container Resources</div>
+                    <div class="section-subtitle">Live resource consumption • Updates every 30s</div>
+                </div>
+            </div>
+
+            <div class="resource-grid">
+                <div class="resource-card">
+                    <div class="resource-card-label"> CPU Usage</div>
+                    <div class="resource-bar-container">
+                        <div class="resource-bar" id="dockerCpuBar" style="width: 0%;"></div>
+                    </div>
+                    <div class="resource-card-value" id="dockerCpuValue">--</div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-label"> Memory</div>
+                    <div class="resource-bar-container">
+                        <div class="resource-bar resource-bar-memory" id="dockerMemBar" style="width: 0%;"></div>
+                    </div>
+                    <div class="resource-card-value" id="dockerMemValue">--</div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-label"> Network I/O</div>
+                    <div class="resource-io-grid">
+                        <div class="io-item">
+                            <div class="io-label">↓ Received</div>
+                            <div class="io-value" id="dockerNetRx">--</div>
+                        </div>
+                        <div class="io-item">
+                            <div class="io-label">↑ Sent</div>
+                            <div class="io-value" id="dockerNetTx">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-label"> Disk I/O</div>
+                    <div class="resource-io-grid">
+                        <div class="io-item">
+                            <div class="io-label">Read</div>
+                            <div class="io-value" id="dockerDiskRead">--</div>
+                        </div>
+                        <div class="io-item">
+                            <div class="io-label">Write</div>
+                            <div class="io-value" id="dockerDiskWrite">--</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

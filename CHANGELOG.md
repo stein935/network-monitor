@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- [feat] Docker resource monitoring section with real-time stats (CPU, memory, network I/O, disk I/O)
+- [feat] `/api/docker-stats` endpoint to fetch container resource metrics
+- [feat] 4-quadrant layout for resource stats with color-coded progress bars
+- [feat] Docker socket mount and Docker CLI in container for stats access
+- [feat] 30-second auto-refresh for resource monitoring
 - [feat] Terminal-style footer with system stats (version, DB size, uptime, copyright, GitHub link)
 - [feat] VERSION file-based version management system with semantic versioning
 - [feat] `/api/stats` endpoint for database statistics (size, log counts)

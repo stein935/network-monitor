@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
   nginx \
   python3-websockets \
   speedtest-cli \
+  docker.io \
   && rm -rf /var/lib/apt/lists/*
 
 # Create app directory

@@ -1024,4 +1024,90 @@ document.addEventListener("DOMContentLoaded", function () {
   footerStatsInterval = setInterval(updateFooterStats, 60000);
 });
 
+// Docker Stats Management
+let dockerStatsInterval = null;
+
+function updateDockerStats() {
+  fetch("/api/docker-stats")
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      if (data && data.available) {
+        // Update CPU
+        const cpuBar = document.getElementById("dockerCpuBar");
+        const cpuValue = document.getElementById("dockerCpuValue");
+        if (cpuBar && cpuValue) {
+          const cpuPercent = data.cpu_percent || 0;
+          cpuBar.style.width = `${cpuPercent}%`;
+          cpuValue.textContent = `${cpuPercent.toFixed(1)}%`;
+
+          // Apply color thresholds
+          cpuBar.classList.remove("warning", "danger");
+          if (cpuPercent >= 85) {
+            cpuBar.classList.add("danger");
+          } else if (cpuPercent >= 70) {
+            cpuBar.classList.add("warning");
+          }
+        }
+
+        // Update Memory
+        const memBar = document.getElementById("dockerMemBar");
+        const memValue = document.getElementById("dockerMemValue");
+        if (memBar && memValue) {
+          const memPercent = data.memory_percent || 0;
+          memBar.style.width = `${memPercent}%`;
+          memValue.textContent = `${data.memory_used} / ${data.memory_total}`;
+
+          // Apply color thresholds
+          memBar.classList.remove("warning", "danger");
+          if (memPercent >= 85) {
+            memBar.classList.add("danger");
+          } else if (memPercent >= 70) {
+            memBar.classList.add("warning");
+          }
+        }
+
+        // Update Network I/O
+        const netRx = document.getElementById("dockerNetRx");
+        const netTx = document.getElementById("dockerNetTx");
+        if (netRx && netTx) {
+          netRx.textContent = data.network_rx || "--";
+          netTx.textContent = data.network_tx || "--";
+        }
+
+        // Update Disk I/O
+        const diskRead = document.getElementById("dockerDiskRead");
+        const diskWrite = document.getElementById("dockerDiskWrite");
+        if (diskRead && diskWrite) {
+          diskRead.textContent = data.disk_read || "--";
+          diskWrite.textContent = data.disk_write || "--";
+        }
+      } else {
+        // Docker stats not available - show placeholder
+        const cpuValue = document.getElementById("dockerCpuValue");
+        const memValue = document.getElementById("dockerMemValue");
+        const netRx = document.getElementById("dockerNetRx");
+        const netTx = document.getElementById("dockerNetTx");
+        const diskRead = document.getElementById("dockerDiskRead");
+        const diskWrite = document.getElementById("dockerDiskWrite");
+
+        if (cpuValue) cpuValue.textContent = "Unavailable";
+        if (memValue) memValue.textContent = "Unavailable";
+        if (netRx) netRx.textContent = "--";
+        if (netTx) netTx.textContent = "--";
+        if (diskRead) diskRead.textContent = "--";
+        if (diskWrite) diskWrite.textContent = "--";
+      }
+    })
+    .catch((error) => {
+      console.error("Error fetching Docker stats:", error);
+    });
+}
+
+// Initialize Docker stats on load
+document.addEventListener("DOMContentLoaded", function () {
+  updateDockerStats();
+  // Update Docker stats every 30 seconds
+  dockerStatsInterval = setInterval(updateDockerStats, 30000);
+});
+
 // Old navigation functions removed - now using time-based navigation

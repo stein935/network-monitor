@@ -11,6 +11,7 @@ A Python-based daemon for monitoring network connectivity, response times, and i
 - **Internet speed testing** - Automated tests every 15 minutes via speedtest-cli
 - **Dual monitoring** - Network latency (ping) + bandwidth (speed tests)
 - **Single-page dashboard** - Unified view of all monitoring data
+- **Docker resource monitoring** - Real-time CPU, memory, network, and disk I/O stats
 - **Daemon mode** - Runs continuously without time limits
 - **Auto cleanup** - Keeps 30 days of logs
 - **CSV export on-demand** - Export historical data when needed
