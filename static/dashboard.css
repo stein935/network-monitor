@@ -309,6 +309,11 @@ body {
     color: var(--orange);
     font-size: 14px;
     margin-top: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+    max-width: 100%;
 }
 
 .speed-nav-group {

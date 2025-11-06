@@ -412,7 +412,11 @@ function updateSpeedTestStats(data) {
     if (downloadEl) downloadEl.textContent = data.download_mbps.toFixed(1);
     if (uploadEl) uploadEl.textContent = data.upload_mbps.toFixed(1);
     if (serverEl) serverEl.textContent = data.server_name || 'Unknown';
-    if (serverHostEl) serverHostEl.textContent = data.server_host || '';
+    if (serverHostEl) {
+        const serverHost = data.server_host || '';
+        serverHostEl.textContent = serverHost;
+        serverHostEl.title = serverHost; // Tooltip shows full URI on hover
+    }
 
     if (lastTestEl && lastTestDateEl && data.timestamp) {
         const parts = data.timestamp.split(' ');

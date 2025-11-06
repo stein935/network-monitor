@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - [style] Improved navigation controls layout with date range display and button grouping
 - [docs] Enhanced CLAUDE.md with Git workflow rules and documentation standards
+
+### Fixed
+- [ui] Server URI overflow in speed test stats box - long server hostnames now truncate with ellipsis and show full text on hover
 - [perf] Disabled chart animations for better performance on Raspberry Pi Zero 2 W
 - [perf] Reduced nginx worker_connections from 1024 to 128 (adequate for typical use)
 - [perf] Disabled nginx access logging to reduce I/O overhead on SD card
