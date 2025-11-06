@@ -13,6 +13,8 @@ let speedTestHoursOffset = 0; // 0 = current time (live), negative = hours back 
 let earliestSpeedTestTime = null; // Track earliest available data
 let networkHoursOffset = 0; // 0 = current time (live), negative = hours back in time
 let earliestNetworkTime = null; // Track earliest available data
+let fetchInProgress = false; // Debounce flag for fetch requests
+let speedFetchInProgress = false; // Debounce flag for speed test fetches
 
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -80,6 +82,7 @@ function initializeChart() {
             ]
         },
         options: {
+            animation: false,  // Disable animations for performance on Pi Zero
             responsive: true,
             maintainAspectRatio: false,
             layout: {
@@ -233,6 +236,7 @@ function initializeSpeedTestChart() {
             ]
         },
         options: {
+            animation: false,  // Disable animations for performance on Pi Zero
             responsive: true,
             maintainAspectRatio: false,
             layout: {
@@ -346,6 +350,10 @@ function initializeSpeedTestChart() {
 
 // Load speed test data
 function loadSpeedTestData() {
+    // Debounce: prevent duplicate requests
+    if (speedFetchInProgress) return;
+    speedFetchInProgress = true;
+
     // Update date range display
     updateSpeedDateRange();
 
@@ -357,7 +365,10 @@ function loadSpeedTestData() {
                 updateSpeedTestStats(data);
             }
         })
-        .catch(error => console.error('Error loading latest speed test:', error));
+        .catch(error => console.error('Error loading latest speed test:', error))
+        .finally(() => {
+            speedFetchInProgress = false;  // Release debounce lock
+        });
 
     // Calculate time range based on offset (12-hour window)
     const now = new Date();
@@ -450,15 +461,20 @@ function updateSpeedTestChart(tests) {
         speedChart.options.scales.y1.max = maxUpload + uploadPadding;
     }
 
-    speedChart.update();
+    speedChart.update('none');  // Use 'none' mode to skip animations for performance
 }
 
 // Start polling for speed test updates
 function startSpeedTestPolling() {
     // Poll every 5 minutes for new speed tests (only when showing live data)
+    // Use requestIdleCallback for lower priority, better performance
     speedTestPollingInterval = setInterval(() => {
         if (document.visibilityState === 'visible' && speedTestHoursOffset === 0) {
-            loadSpeedTestData();
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(() => loadSpeedTestData(), { timeout: 2000 });
+            } else {
+                loadSpeedTestData();
+            }
         }
     }, 300000); // 5 minutes
 }
@@ -688,6 +704,10 @@ function parseCSV(csv) {
 
 // Load network monitoring data
 function loadNetworkData() {
+    // Debounce: prevent duplicate requests
+    if (fetchInProgress) return;
+    fetchInProgress = true;
+
     // Update date range display
     updateNetworkDateRange();
 
@@ -738,6 +758,9 @@ function loadNetworkData() {
         })
         .catch(error => {
             console.error('Error loading chart data:', error);
+        })
+        .finally(() => {
+            fetchInProgress = false;  // Release debounce lock
         });
 }
 
@@ -796,7 +819,7 @@ function updateChartWithData(csv) {
         chart.options.scales.y.max = maxTime + padding;
     }
 
-    chart.update();
+    chart.update('none');  // Use 'none' mode to skip animations for performance
 }
 
 // WebSocket connection
@@ -879,9 +902,14 @@ function updateWebSocketStatus(status) {
 function startPolling() {
     if (pollingInterval) return; // Already polling
 
+    // Use requestIdleCallback for lower priority, better performance
     pollingInterval = setInterval(() => {
         if (document.visibilityState === 'visible' && networkHoursOffset === 0) {
-            loadNetworkData();
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(() => loadNetworkData(), { timeout: 2000 });
+            } else {
+                loadNetworkData();
+            }
         }
     }, 60000); // Poll every 60 seconds
 }

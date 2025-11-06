@@ -28,6 +28,10 @@ EXPOSE 8080 8081
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Compile Python bytecode for faster startup
+RUN python3 -m compileall -q /app/*.py
 
 # Make scripts executable
 RUN chmod +x /app/start_services.sh

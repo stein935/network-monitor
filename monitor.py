@@ -27,6 +27,7 @@ class NetworkMonitor:
         self.db = NetworkMonitorDB()
         self.last_cleanup = time.time()
         self.cleanup_interval = 3600  # Clean up once per hour
+        self.print_count = 0  # Track prints for reduced verbosity
 
     def ping_host(self, host="8.8.8.8"):
         """Ping a host and return response time in ms, or None if failed."""
@@ -176,17 +177,22 @@ class NetworkMonitor:
                 # Get current timestamp
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                # Insert into database
+                # Insert into database (WAL mode makes individual commits efficient)
                 log_id = self.db.insert_log(
                     timestamp, status, avg_response_time,
                     success_count, total_count, failed_count
                 )
 
-                # Print status
-                if avg_response_time is not None:
-                    print(f"[{timestamp}] {status} - {avg_response_time:.2f}ms ({success_count}/{total_count}) [ID: {log_id}]")
-                else:
-                    print(f"[{timestamp}] {status} - null ({success_count}/{total_count}) [ID: {log_id}]")
+                # Increment print counter
+                self.print_count += 1
+
+                # Print status (reduce verbosity - only every 10th iteration or on failures)
+                should_print = (self.print_count % 10 == 0) or (status == "DISCONNECTED")
+                if should_print:
+                    if avg_response_time is not None:
+                        print(f"[{timestamp}] {status} - {avg_response_time:.2f}ms ({success_count}/{total_count}) [ID: {log_id}]")
+                    else:
+                        print(f"[{timestamp}] {status} - null ({success_count}/{total_count}) [ID: {log_id}]")
 
                 # Sleep before next sample (account for time taken)
                 elapsed = time.time() - iteration_start

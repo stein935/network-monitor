@@ -17,6 +17,7 @@ import urllib.parse
 import asyncio
 import websockets
 import json
+import hashlib
 
 # Import database handler
 sys.path.insert(0, str(Path(__file__).parent))
@@ -94,6 +95,8 @@ async def broadcast_update(db):
 class VisualizationHandler(BaseHTTPRequestHandler):
     logs_dir = None
     db = None
+    _cached_html = None  # Cache generated HTML
+    _cache_invalidation_time = None  # Track when to regenerate cache
 
     def do_GET(self):
         # Serve favicon
@@ -110,13 +113,24 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             self.wfile.write(content)
             return
 
-        # Serve static files (CSS, JS)
+        # Serve static files (CSS, JS) with ETag support
         if self.path.startswith("/static/"):
             try:
                 static_path = Path(__file__).parent / self.path[1:]  # Remove leading /
                 if static_path.exists() and static_path.is_file():
                     with open(static_path, "rb") as f:
                         content = f.read()
+
+                    # Generate ETag from content hash
+                    etag = hashlib.md5(content).hexdigest()
+
+                    # Check if client has matching ETag
+                    client_etag = self.headers.get("If-None-Match")
+                    if client_etag == etag:
+                        # File hasn't changed, send 304 Not Modified
+                        self.send_response(304)
+                        self.end_headers()
+                        return
 
                     # Determine content type
                     if self.path.endswith(".css"):
@@ -130,6 +144,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-type", content_type)
                     self.send_header("Content-Length", len(content))
                     self.send_header("Cache-Control", "public, max-age=3600")
+                    self.send_header("ETag", etag)
                     self.end_headers()
                     self.wfile.write(content)
                 else:
@@ -138,9 +153,24 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 self.send_error(500, f"Error serving static file: {str(e)}")
 
         elif self.path == "/" or self.path == "/index.html":
-            # Serve single-page dashboard
+            # Serve single-page dashboard (with in-memory caching)
             try:
-                html = self._generate_single_page_dashboard()
+                # Use cached HTML if available and recent (cache for 30 seconds)
+                now = time.time()
+                cache_duration = 30  # seconds
+
+                if (VisualizationHandler._cached_html is None or
+                    VisualizationHandler._cache_invalidation_time is None or
+                    now - VisualizationHandler._cache_invalidation_time > cache_duration):
+
+                    # Generate fresh HTML
+                    html = self._generate_single_page_dashboard()
+                    VisualizationHandler._cached_html = html
+                    VisualizationHandler._cache_invalidation_time = now
+                else:
+                    # Use cached version
+                    html = VisualizationHandler._cached_html
+
                 content = html.encode()
 
                 self.send_response(200)
@@ -417,7 +447,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/dashboard.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">

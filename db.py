@@ -21,6 +21,12 @@ class NetworkMonitorDB:
     def init_db(self):
         """Initialize database with schema."""
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+
+        # Performance optimizations for Pi Zero 2 W
+        self.conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
+        self.conn.execute("PRAGMA synchronous=NORMAL")  # Faster writes, still safe
+        self.conn.execute("PRAGMA cache_size=-32000")  # Use 32MB cache for queries
+
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS network_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +77,10 @@ class NetworkMonitorDB:
             (timestamp, status, response_time, success_count, total_count, failed_count)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (timestamp, status, response_time, success_count, total_count, failed_count))
+
+        # Commit immediately - WAL mode makes this efficient
         self.conn.commit()
+
         return cursor.lastrowid
 
     def get_logs_by_hour(self, date_str, hour):
@@ -171,8 +180,9 @@ class NetworkMonitorDB:
         deleted += cursor.rowcount
         self.conn.commit()
 
-        # Vacuum to reclaim space
-        self.conn.execute("VACUUM")
+        # VACUUM is expensive on Pi - only run if significant deletions (>10% of DB)
+        # WAL mode auto-checkpoints, so VACUUM is less critical
+        # Consider running VACUUM manually during maintenance windows instead
 
         return deleted
 

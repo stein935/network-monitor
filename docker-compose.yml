@@ -18,3 +18,9 @@ services:
     mem_limit: 192m # Maximum 192MB RAM (leaving ~320MB for Pi-hole + system)
     mem_reservation: 96m # Soft limit / preferred usage
     cpus: 0.4 # Maximum 40% of one CPU core (leaving 60% for Pi-hole + system)
+    # Logging limits to prevent unbounded disk usage
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"  # Maximum log file size before rotation
+        max-file: "2"   # Keep only 2 log files (total max: 2MB)
