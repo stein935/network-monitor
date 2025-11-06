@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- [feat] Terminal-style footer with system stats (version, DB size, uptime, copyright, GitHub link)
+- [feat] VERSION file-based version management system with semantic versioning
+- [feat] `/api/stats` endpoint for database statistics (size, log counts)
+- [feat] Database count methods: `get_log_count()` and `get_speed_test_count()`
+- [feat] Dynamic uptime display in footer (updates every minute)
 - [feat] Date range display showing exact time window being viewed for both network monitoring and speed test charts
 - [feat] "Go Live" button with red dot indicator to quickly return to live view from historical data
 - [feat] Dynamic button visibility - Go Live button only appears when viewing historical data (offset != 0)
@@ -21,6 +26,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [perf] requestIdleCallback for low-priority background tasks
 
 ### Changed
+- [ui] Success Rate chart y-axis now shows full range (0-105%) instead of truncated (80-105%)
+- [ui] Success Rate converted to area chart with filled background for better visibility
+- [ui] Removed point markers from Success Rate line for cleaner visualization
+- [ui] Reduced chart point size from 4px to 2px for less clutter
+- [dev] `make dev` now performs hard refresh (Cmd+Shift+R) to bypass browser cache
 - [style] Improved navigation controls layout with date range display and button grouping
 - [docs] Enhanced CLAUDE.md with Git workflow rules and documentation standards
 

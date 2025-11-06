@@ -629,11 +629,13 @@ network-monitor/
 ├── start_services.sh       # Service startup script
 ├── Dockerfile              # Docker image definition
 ├── docker-compose.yml      # Docker container config
+├── VERSION                 # Semantic version number (e.g., 1.0.0)
 ├── static/
 │   ├── dashboard.css       # Dashboard styling (Gruvbox theme)
 │   └── dashboard.js        # Dashboard logic (Chart.js, WebSocket)
 ├── README.md               # User documentation
 ├── DEPLOYMENT.md           # Raspberry Pi deployment guide
+├── CHANGELOG.md            # Version history and changes
 ├── CLAUDE.md               # This file
 └── logs/
     └── network_monitor.db  # SQLite database (network_logs + speed_tests tables)
@@ -692,6 +694,41 @@ The dashboard combines both monitoring types in one view:
   - Automatically reconnects WebSocket for real-time updates
   - Implemented in `dashboard.js:goNetworkLive()` and `dashboard.js:goSpeedLive()`
 
+### Footer Implementation
+
+The footer displays system statistics in a minimal terminal-style layout:
+
+**Components:**
+- **Version**: Read from `VERSION` file via `get_version()` function
+- **DB Size**: Real-time database file size (formatted as B/KB/MB/GB)
+- **Uptime**: Time since page load (updates every minute)
+- **Copyright**: Static copyright notice
+- **GitHub Link**: Repository link with hover effect
+
+**Implementation (serve.py):**
+
+```python
+def get_version():
+    """Read version from VERSION file."""
+    try:
+        version_file = Path(__file__).parent / "VERSION"
+        if version_file.exists():
+            return version_file.read_text().strip()
+    except Exception:
+        pass
+    return "1.0.0"  # Fallback version
+```
+
+**API endpoint:** `/api/stats` returns database statistics:
+```json
+{
+  "db_size": "2.3MB",
+  "db_size_bytes": 2411520,
+  "network_log_count": 14523,
+  "speed_test_count": 96
+}
+```
+
 ### API Endpoints
 
 **Network logs:**
@@ -704,6 +741,50 @@ The dashboard combines both monitoring types in one view:
 - `GET /api/speed-tests/latest` - Returns latest speed test (for stats display)
 - `GET /api/speed-tests/recent?start_time=...&end_time=...` - Recent tests for chart
 
+**System stats:**
+
+- `GET /api/stats` - Returns database size and log counts (for footer)
+
+## Version Management
+
+The project uses a simple VERSION file for semantic versioning:
+
+**File location:** `VERSION` (plain text file in project root)
+
+**Format:** `Major.Minor.Patch` (e.g., `1.0.0`)
+
+**Usage:**
+
+```bash
+# Update version
+echo "1.1.0" > VERSION
+
+# Deploy changes
+make dev  # Copies VERSION to container and restarts services
 ```
 
-```
+**Implementation:**
+- `get_version()` function in serve.py reads VERSION file
+- Fallback to "1.0.0" if file missing or unreadable
+- Version displays in footer and updates automatically
+- Follows [Semantic Versioning](https://semver.org/)
+
+## Chart Styling
+
+The dashboard charts use Chart.js with custom styling:
+
+**Network Monitoring Chart:**
+- **Response Time**: Line chart, blue color (#458588), 2px points
+- **Success Rate**: Area chart, green fill (rgba 152,151,26,0.1), no points
+  - Y-axis range: 0-105% (full range, not truncated)
+  - Segments turn orange (#d65d0e) when rate < 100%
+  - Filled area for better visibility
+
+**Speed Test Chart:**
+- **Download**: Area chart with filled background, blue color
+- **Upload**: Line chart, purple color (#b16286)
+- Both charts: 2px points for minimal visual clutter
+
+**Performance:**
+- All animations disabled (`animation: false`) for Pi Zero performance
+- Chart updates use `chart.update('none')` to skip transitions

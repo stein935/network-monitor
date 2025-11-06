@@ -210,6 +210,20 @@ class NetworkMonitorDB:
 
         return cursor.fetchone()
 
+    def get_log_count(self):
+        """Get total count of network log entries."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM network_logs")
+        result = cursor.fetchone()
+        return result[0] if result else 0
+
+    def get_speed_test_count(self):
+        """Get total count of speed test entries."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM speed_tests")
+        result = cursor.fetchone()
+        return result[0] if result else 0
+
     def insert_speed_test(self, timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country):
         """Insert a speed test result."""
         cursor = self.conn.cursor()

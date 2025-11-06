@@ -83,13 +83,14 @@ Browser → nginx:8080 (gzip, reverse proxy)
 
 ### Web Dashboard
 - **Single-page design**: Unified view of all monitoring
-- **Network chart**: Dual y-axis (response time + success rate)
+- **Network chart**: Dual y-axis (response time + success rate as area chart)
 - **Speed test chart**: Download + upload bandwidth over time
 - **Stats display**: Latest speed test results (download, upload, server)
 - **Time-based navigation**: Previous/Next buttons for both charts
 - **Date range indicators**: Display showing current time window
 - **Go Live button**: One-click return to live data (red dot indicator)
-- **Gruvbox theme**: Dark, easy on eyes
+- **Footer stats**: Version, DB size, uptime, copyright, GitHub link
+- **Gruvbox theme**: Light, easy on eyes
 - **Color coding**: Green (100%), Orange (partial), Red (fail)
 
 ## Configuration
@@ -110,6 +111,17 @@ docker exec network-monitor python3 /app/monitor.py [frequency] [sample_size]
 - `sample_size`: Number of pings per log entry (default: 5)
 - Retention: 30 days (configurable in monitor.py)
 - Speed tests: Automatically run every 15 minutes (hardcoded)
+
+### Version Management
+
+Update the version number by editing the `VERSION` file:
+
+```bash
+echo "1.1.0" > VERSION
+make dev  # or make rebuild-prod on Pi
+```
+
+The version follows [Semantic Versioning](https://semver.org/) (Major.Minor.Patch) and displays in the footer.
 
 ### Port Configuration
 

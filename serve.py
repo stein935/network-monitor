@@ -24,6 +24,18 @@ sys.path.insert(0, str(Path(__file__).parent))
 from db import NetworkMonitorDB
 
 
+# Version management
+def get_version():
+    """Read version from VERSION file."""
+    try:
+        version_file = Path(__file__).parent / "VERSION"
+        if version_file.exists():
+            return version_file.read_text().strip()
+    except Exception:
+        pass
+    return "1.0.0"  # Fallback version
+
+
 # Global WebSocket clients
 websocket_clients = set()
 
@@ -159,10 +171,12 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 now = time.time()
                 cache_duration = 30  # seconds
 
-                if (VisualizationHandler._cached_html is None or
-                    VisualizationHandler._cache_invalidation_time is None or
-                    now - VisualizationHandler._cache_invalidation_time > cache_duration):
-
+                if (
+                    VisualizationHandler._cached_html is None
+                    or VisualizationHandler._cache_invalidation_time is None
+                    or now - VisualizationHandler._cache_invalidation_time
+                    > cache_duration
+                ):
                     # Generate fresh HTML
                     html = self._generate_single_page_dashboard()
                     VisualizationHandler._cached_html = html
@@ -316,6 +330,45 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error fetching speed test data: {str(e)}")
 
+        elif self.path == "/api/stats":
+            # Get database statistics
+            try:
+                # Get database file size
+                db_path = self.logs_dir / "network_monitor.db"
+                db_size_bytes = db_path.stat().st_size if db_path.exists() else 0
+
+                # Convert to human-readable format
+                if db_size_bytes < 1024:
+                    db_size_str = f"{db_size_bytes}B"
+                elif db_size_bytes < 1024 * 1024:
+                    db_size_str = f"{db_size_bytes / 1024:.1f}KB"
+                elif db_size_bytes < 1024 * 1024 * 1024:
+                    db_size_str = f"{db_size_bytes / (1024 * 1024):.1f}MB"
+                else:
+                    db_size_str = f"{db_size_bytes / (1024 * 1024 * 1024):.2f}GB"
+
+                # Get log counts
+                network_count = self.db.get_log_count()
+                speed_count = self.db.get_speed_test_count()
+
+                data = {
+                    "db_size": db_size_str,
+                    "db_size_bytes": db_size_bytes,
+                    "network_log_count": network_count,
+                    "speed_test_count": speed_count,
+                }
+                content = json.dumps(data).encode("utf-8")
+
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Content-Length", len(content))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content)
+            except Exception as e:
+                self.send_error(500, f"Error fetching stats: {str(e)}")
+
         elif self.path.startswith("/csv/"):
             # Export CSV from SQLite for dynamic visualization
             try:
@@ -388,6 +441,9 @@ class VisualizationHandler(BaseHTTPRequestHandler):
 
     def _generate_single_page_dashboard(self):
         """Generate single-page dashboard with chart and data listing."""
+        # Get version from VERSION file
+        version = get_version()
+
         # Get available hours from database
         available_hours = self.db.get_available_hours()
 
@@ -571,6 +627,24 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     <div class="legend-color" style="background: var(--purple);"></div>
                     <span>Upload (Mbps)</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-content">
+                <span class="footer-prompt">$</span>
+                <span class="footer-item">./network-monitor <span id="footerVersion">v'''
+            + version
+            + '''</span></span>
+                <span class="footer-separator">•</span>
+                <span class="footer-item">DB: <span id="footerDbSize">--</span></span>
+                <span class="footer-separator">•</span>
+                <span class="footer-item">Uptime: <span id="footerUptime">--</span></span>
+                <span class="footer-separator">•</span>
+                <span class="footer-item">© 2025</span>
+                <span class="footer-separator">•</span>
+                <a href="https://github.com/stein935/network-monitor" target="_blank" class="footer-link" title="View on GitHub">GitHub ↗</a>
             </div>
         </div>
     </div>

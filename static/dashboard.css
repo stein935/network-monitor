@@ -219,7 +219,7 @@ body {
 
 .chart-wrapper {
     position: relative;
-    height: 500px;
+    height: 300px;
 }
 
 /* Navigation */
@@ -448,6 +448,58 @@ body {
     border-radius: 2px;
 }
 
+/* Footer */
+.footer {
+    background: var(--bg-soft);
+    border: 2px solid var(--gray);
+    border-radius: 6px;
+    padding: 12px 20px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(60, 56, 54, 0.1);
+}
+
+.footer-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--fg-dim);
+    font-family: 'Fira Code', monospace;
+}
+
+.footer-prompt {
+    color: var(--green);
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.footer-item {
+    color: var(--fg-dim);
+}
+
+.footer-item span {
+    color: var(--fg);
+    font-weight: 500;
+}
+
+.footer-separator {
+    color: var(--gray-light);
+}
+
+.footer-link {
+    color: var(--blue);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.footer-link:hover {
+    color: var(--orange);
+    text-decoration: underline;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .status-bar {
@@ -456,7 +508,7 @@ body {
     }
 
     .chart-wrapper {
-        height: 400px;
+        height: 200px;
     }
 
     .navigation {
@@ -466,5 +518,11 @@ body {
     .nav-button {
         width: 100%;
         justify-content: center;
+    }
+
+    .footer-content {
+        font-size: 12px;
+        justify-content: center;
+        text-align: center;
     }
 }

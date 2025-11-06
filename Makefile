@@ -33,6 +33,7 @@ dev:
 	@docker cp monitor.py network-monitor:/app/monitor.py
 	@docker cp start_services.sh network-monitor:/app/start_services.sh
 	@docker cp nginx.conf network-monitor:/etc/nginx/nginx.conf
+	@docker cp VERSION network-monitor:/app/VERSION
 	@docker cp static network-monitor:/app/
 	@docker exec network-monitor chmod +x /app/start_services.sh
 	@echo "🔄 Stopping services..."
@@ -64,7 +65,7 @@ dev:
 		-e '        set active tab index of w to tabIndex' \
 		-e '        activate' \
 		-e '        tell application "System Events"' \
-		-e '          keystroke "r" using command down' \
+		-e '          keystroke "r" using {command down, shift down}' \
 		-e '        end tell' \
 		-e '        exit repeat' \
 		-e '      end if' \
