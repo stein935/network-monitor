@@ -7,8 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+
 - [feat] Docker resource monitoring section with real-time stats (CPU, memory, network I/O, disk I/O)
 - [feat] `/api/docker-stats` endpoint to fetch container resource metrics
+- [feat] `/proc/meminfo` fallback for memory monitoring on ARM platforms (Raspberry Pi)
 - [feat] 4-quadrant layout for resource stats with color-coded progress bars
 - [feat] Docker socket mount and Docker CLI in container for stats access
 - [feat] 30-second auto-refresh for resource monitoring
@@ -35,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [perf] requestIdleCallback for low-priority background tasks
 
 ### Changed
+
 - [ui] Success Rate chart y-axis now shows full range (0-105%) instead of truncated (80-105%)
 - [ui] Success Rate converted to area chart with filled background for better visibility
 - [ui] Removed point markers from Success Rate line for cleaner visualization
@@ -46,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [docs] Enhanced CLAUDE.md with Git workflow rules and documentation standards
 
 ### Fixed
+
 - [bug] Speed test navigation buttons not working due to race condition in debounce logic
 - [bug] Speed test back button incorrectly disabled when historical data available
 - [ui] Server URI overflow in speed test stats box - long server hostnames now truncate with ellipsis and show full text on hover
@@ -56,23 +60,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [perf] Docker logging limits: max 1MB per file, 2 files max (prevents unbounded growth)
 
 ### Removed
+
 - [perf] Removed expensive VACUUM from hourly cleanup (WAL mode auto-checkpoints make it less critical)
 
 ## Previous Updates
 
 ### Phase 3 - nginx Reverse Proxy
+
 - Added nginx reverse proxy for gzip compression and better concurrency
 - 70% bandwidth reduction via gzip compression
 - WebSocket proxying through `/ws` path
 - Improved static file serving
 
 ### Phase 2 - Chart.js and WebSocket
+
 - Migrated from Plotly to Chart.js (93% page size reduction)
 - Added WebSocket support for real-time updates (30-second batches)
 - 95% CPU reduction vs HTTP polling
 - Single-page dashboard with unified view
 
 ### Phase 1 - SQLite Migration
+
 - Migrated from CSV to SQLite database storage
 - 70% reduction in disk I/O
 - Added internet speed testing (every 15 minutes)

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code when working with this repository.
 Network Monitor: Python daemon monitoring network connectivity + internet speed, with SQLite storage and real-time web visualization.
 
 **Key Stack:**
+
 - SQLite (WAL mode) + indexed queries
 - Chart.js visualization (93% smaller than Plotly)
 - WebSocket (30s batches) + HTTP polling fallback
@@ -21,6 +22,7 @@ Network Monitor: Python daemon monitoring network connectivity + internet speed,
 ### Core Components
 
 1. **monitor.py** - Daemon with dual monitoring:
+
    - Pings 8.8.8.8 every `FREQUENCY` (default: 1s), logs every `SAMPLE_SIZE` samples (default: 60)
    - Speed test thread: speedtest-cli every 15 min (background)
    - Writes to SQLite: `logs/network_monitor.db`
@@ -28,6 +30,7 @@ Network Monitor: Python daemon monitoring network connectivity + internet speed,
    - WAL mode immediate commits, reduced logging (every 10th sample)
 
 2. **serve.py** - Dual server (HTTP:8090 + WebSocket:8081):
+
    - Single-page dashboard: network chart (1hr window) + speed test chart (12hr window) + Docker resource monitoring
    - Time-based navigation (offset from current, not file-based)
    - Live view: WebSocket updates, fallback to HTTP polling
@@ -36,12 +39,14 @@ Network Monitor: Python daemon monitoring network connectivity + internet speed,
    - API: `/api/network-logs/earliest`, `/api/speed-tests/{latest,earliest,recent}`, `/api/stats`, `/api/docker-stats`, `/csv/?start_time=...&end_time=...`
 
 3. **db.py** - SQLite handler:
+
    - Tables: `network_logs` (timestamp, status, response_time, success/total/failed counts), `speed_tests` (timestamp, download/upload mbps, ping, server info)
    - Both indexed on timestamp
    - WAL mode, synchronous=NORMAL, 32MB cache
    - Auto-cleanup (30 days retention), VACUUM removed (WAL auto-checkpoints)
 
 4. **nginx.conf** - Reverse proxy:
+
    - External :8080 → serve.py:8090 (HTTP), :8081 (WebSocket via /ws)
    - Gzip compression, proxy cache (30s for /api, /csv)
    - Reduced workers (128 conn), access logs disabled
@@ -127,6 +132,7 @@ Before ANY `git push`, you MUST:
 ### Git Workflow - CRITICAL RULES
 
 **NEVER Auto-Push:**
+
 - **NEVER `git push` without explicit permission**
 - After committing, STOP and ask: "Ready to push. Should I proceed?"
 - Wait for explicit "yes" or "push now"
@@ -136,6 +142,7 @@ Before ANY `git push`, you MUST:
 **ALWAYS ASK before:** `git push`, `git push --force`, `git merge` to main/master/develop, destructive operations
 
 **When complete:**
+
 1. Run pre-push checklist
 2. Commit with conventional format: `type(scope): description`
 3. Show summary
@@ -143,6 +150,7 @@ Before ANY `git push`, you MUST:
 5. Wait for response
 
 **Commit standards:**
+
 - Types: feat, fix, docs, style, refactor, test, chore
 - First line <72 chars
 - NO Claude attribution or co-author tags
@@ -150,16 +158,19 @@ Before ANY `git push`, you MUST:
 ## Important Implementation Details
 
 ### Speed Tests
+
 - Separate daemon thread in monitor.py
 - Runs `speedtest-cli --json` every 15 min
 - Inserts into `speed_tests` table
 - Dashboard polls every 5 min (live) or static (historical)
 
 ### Cross-Platform Support
+
 - Ping regex handles both macOS ("round-trip") and Linux ("rtt") output formats
 - Docker requires `privileged: true` + NET_RAW/NET_ADMIN for ping
 
 ### Dashboard Navigation
+
 - Time-based (not file-based): offset from current time
 - Network: 1hr window, ±1hr navigation
 - Speed tests: 12hr window, ±12hr navigation
@@ -167,25 +178,31 @@ Before ANY `git push`, you MUST:
 - Historical (offset<0): Static data, no updates
 
 ### WebSocket
+
 - JavaScript connects via `ws://${location.host}/ws`
 - nginx proxies /ws to serve.py:8081 with upgrade headers
 - Fallback to HTTP polling on error
 
 ### Chart.js
+
 - Animations disabled (`animation: false`) for Pi Zero performance
 - Updates use `chart.update('none')` to skip transitions
 - Network chart: Response time (blue line) + Success rate (green area, turns orange <100%)
 - Speed chart: Download (blue area) + Upload (purple line)
 
 ### Docker Resource Monitoring
+
 - Real-time container stats via `/api/docker-stats`
 - Runs `docker stats --no-stream --format "{{json .}}"`
+- Fallback: Reads `/proc/meminfo` when docker stats shows `0B / 0B` (ARM platforms like Pi Zero 2 W)
+- Memory calculation: `MemTotal - MemAvailable` from /proc for actual container usage
 - 4-quadrant layout: CPU (progress bar), Memory (progress bar), Network I/O (RX/TX), Disk I/O (read/write)
 - Color thresholds: blue (<70%), yellow (70-85%), red (>85%)
 - Updates every 30 seconds
 - Requires Docker socket mount (`/var/run/docker.sock`) and Docker CLI in container
 
 ### Footer
+
 - Version from `VERSION` file (semantic versioning)
 - DB size from `/api/stats`
 - Uptime client-side (page load)

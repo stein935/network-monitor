@@ -12,6 +12,7 @@ A Python-based daemon for monitoring network connectivity, response times, and i
 - **Dual monitoring** - Network latency (ping) + bandwidth (speed tests)
 - **Single-page dashboard** - Unified view of all monitoring data
 - **Docker resource monitoring** - Real-time CPU, memory, network, and disk I/O stats
+  - Fallback to `/proc/meminfo` on ARM platforms for accurate memory reporting
 - **Daemon mode** - Runs continuously without time limits
 - **Auto cleanup** - Keeps 30 days of logs
 - **CSV export on-demand** - Export historical data when needed
@@ -39,6 +40,7 @@ docker compose up -d
 ## Architecture
 
 **Data flow:**
+
 ```
 Browser → nginx:8080 (gzip, reverse proxy)
               ↓
@@ -51,6 +53,7 @@ Browser → nginx:8080 (gzip, reverse proxy)
 ```
 
 **Performance optimizations:**
+
 - Phase 1 (SQLite): 70% reduction in disk I/O vs CSV
 - Phase 2 (Chart.js): 93% smaller pages (200KB vs 3MB Plotly)
 - Phase 2 (WebSocket): 95% CPU reduction vs HTTP polling
@@ -65,6 +68,7 @@ Browser → nginx:8080 (gzip, reverse proxy)
 ## Features Explained
 
 ### Real-Time Monitoring
+
 - **Network monitoring**: 1-hour window with WebSocket updates every 30 seconds
 - **Speed testing**: 12-hour window with automated tests every 15 minutes
 - **Live indicator**: Shows when viewing current data
@@ -74,6 +78,7 @@ Browser → nginx:8080 (gzip, reverse proxy)
 - **Go Live button**: Quick return to live view from historical data (appears when navigating to past)
 
 ### Data Storage
+
 - **SQLite database**: `logs/network_monitor.db`
   - `network_logs` table: Ping monitoring data
   - `speed_tests` table: Speed test results
@@ -83,6 +88,7 @@ Browser → nginx:8080 (gzip, reverse proxy)
 - **Auto-cleanup**: Removes data older than 30 days (VACUUM on-demand for maintenance)
 
 ### Web Dashboard
+
 - **Single-page design**: Unified view of all monitoring
 - **Network chart**: Dual y-axis (response time + success rate as area chart)
 - **Speed test chart**: Download + upload bandwidth over time
@@ -108,6 +114,7 @@ docker exec network-monitor python3 /app/monitor.py [frequency] [sample_size]
 ```
 
 **Parameters:**
+
 - `frequency`: Seconds between pings (default: 1)
 - `sample_size`: Number of pings per log entry (default: 5)
 - Retention: 30 days (configurable in monitor.py)
@@ -127,13 +134,15 @@ The version follows [Semantic Versioning](https://semver.org/) (Major.Minor.Patc
 ### Port Configuration
 
 Edit `docker-compose.yml`:
+
 ```yaml
 ports:
-  - "8080:8080"  # External:Internal (nginx HTTP)
-  - "8081:8081"  # External:Internal (WebSocket)
+  - "8080:8080" # External:Internal (nginx HTTP)
+  - "8081:8081" # External:Internal (WebSocket)
 ```
 
 **Internal port architecture:**
+
 - nginx listens on port 8080 (proxies requests)
 - Python HTTP server on port 8090 (internal, proxied by nginx)
 - WebSocket server on port 8081 (proxied via `/ws` path)
@@ -143,6 +152,7 @@ ports:
 ### SQLite Schema
 
 **Network Logs Table:**
+
 ```sql
 CREATE TABLE network_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,6 +168,7 @@ CREATE INDEX idx_timestamp ON network_logs(timestamp);
 ```
 
 **Speed Tests Table:**
+
 ```sql
 CREATE TABLE speed_tests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,6 +187,7 @@ CREATE INDEX idx_speed_timestamp ON speed_tests(timestamp);
 ### CSV Export Format
 
 **Network logs:**
+
 ```
 timestamp, status, response_time, success_count, total_count, failed_count
 2025-11-03 23:45:00, CONNECTED, 14.5, 60, 60, 0
@@ -238,6 +250,7 @@ docker logs network-monitor -f
 ## Troubleshooting
 
 ### No data showing
+
 ```bash
 # Check monitor is running
 docker exec network-monitor pgrep -f monitor.py
@@ -250,6 +263,7 @@ sudo systemctl restart network-monitor-daemon.service
 ```
 
 ### WebSocket disconnected
+
 ```bash
 # Check server logs
 sudo journalctl -u network-monitor-server.service | grep WebSocket
@@ -263,6 +277,7 @@ docker compose up -d
 ```
 
 ### Speed tests not running
+
 ```bash
 # Check monitor process
 docker exec network-monitor pgrep -f monitor.py
@@ -280,37 +295,40 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for more troubleshooting steps.
 
 Optimized for Raspberry Pi Zero 2 W (512MB RAM):
 
-| Component | Optimization | Improvement |
-|-----------|--------------|-------------|
-| **Database** | SQLite vs CSV | 70% less disk I/O |
-| | WAL mode | 30-40% faster writes |
-| | 32MB cache | Faster queries |
-| **Frontend** | Chart.js vs Plotly | 93% smaller pages |
-| | Disabled animations | 30% faster rendering |
-| | ETag caching | 60% less bandwidth (repeat) |
-| **Backend** | WebSocket vs polling | 95% less CPU |
-| | nginx gzip | 70% less bandwidth |
-| | nginx proxy cache | 40-60% less Python load |
-| | HTML caching | 70% less CPU (page gen) |
-| | Reduced logging | 20% less CPU |
-| **Docker** | Bytecode compilation | 10-15% faster startup |
-| | Logging limits | Prevents disk bloat |
-| **Overall** | All optimizations | 30-35% resource reduction |
+| Component    | Optimization         | Improvement                 |
+| ------------ | -------------------- | --------------------------- |
+| **Database** | SQLite vs CSV        | 70% less disk I/O           |
+|              | WAL mode             | 30-40% faster writes        |
+|              | 32MB cache           | Faster queries              |
+| **Frontend** | Chart.js vs Plotly   | 93% smaller pages           |
+|              | Disabled animations  | 30% faster rendering        |
+|              | ETag caching         | 60% less bandwidth (repeat) |
+| **Backend**  | WebSocket vs polling | 95% less CPU                |
+|              | nginx gzip           | 70% less bandwidth          |
+|              | nginx proxy cache    | 40-60% less Python load     |
+|              | HTML caching         | 70% less CPU (page gen)     |
+|              | Reduced logging      | 20% less CPU                |
+| **Docker**   | Bytecode compilation | 10-15% faster startup       |
+|              | Logging limits       | Prevents disk bloat         |
+| **Overall**  | All optimizations    | 30-35% resource reduction   |
 
 ## API Endpoints
 
 The dashboard uses these API endpoints for data retrieval:
 
 **Network monitoring:**
+
 - `GET /api/network-logs/earliest` - Get earliest network log entry
 - `GET /csv/?start_time=YYYY-MM-DD HH:MM:SS&end_time=YYYY-MM-DD HH:MM:SS` - CSV export for time range
 
 **Speed tests:**
+
 - `GET /api/speed-tests/latest` - Get latest speed test result
 - `GET /api/speed-tests/recent?start_time=...&end_time=...` - Get speed tests in time range
 - `GET /api/speed-tests/recent?hours=24` - Get speed tests from last N hours (default: 24)
 
 **WebSocket:**
+
 - `WS /ws` - Real-time updates for network logs (30-second batches)
 
 ## Documentation

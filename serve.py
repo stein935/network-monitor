@@ -423,10 +423,17 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                 # Run docker stats command for network-monitor container
                 # Use Go template format instead of --format json
                 result = subprocess.run(
-                    ["docker", "stats", "--no-stream", "--format", "{{json .}}", "network-monitor"],
+                    [
+                        "docker",
+                        "stats",
+                        "--no-stream",
+                        "--format",
+                        "{{json .}}",
+                        "network-monitor",
+                    ],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
                 )
 
                 if result.returncode == 0 and result.stdout.strip():
@@ -438,14 +445,18 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                         data = {
                             "available": False,
                             "error": f"JSON parse error: {str(e)}",
-                            "stdout": result.stdout[:200],  # First 200 chars for debugging
-                            "stderr": result.stderr[:200] if result.stderr else ""
+                            "stdout": result.stdout[
+                                :200
+                            ],  # First 200 chars for debugging
+                            "stderr": result.stderr[:200] if result.stderr else "",
                         }
                         content = json.dumps(data).encode("utf-8")
                         self.send_response(200)
                         self.send_header("Content-type", "application/json")
                         self.send_header("Content-Length", len(content))
-                        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                        self.send_header(
+                            "Cache-Control", "no-cache, no-store, must-revalidate"
+                        )
                         self.send_header("Access-Control-Allow-Origin", "*")
                         self.end_headers()
                         self.wfile.write(content)
@@ -460,7 +471,53 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     mem_parts = mem_usage.split(" / ")
                     mem_used = mem_parts[0] if len(mem_parts) > 0 else "0B"
                     mem_total = mem_parts[1] if len(mem_parts) > 1 else "0B"
-                    mem_percent = stats.get("MemPerc", "0%").rstrip("%")
+                    mem_percent_str = stats.get("MemPerc", "0%").rstrip("%")
+
+                    # Fallback for ARM platforms (Raspberry Pi) where docker stats shows 0B / 0B
+                    # This happens because Docker resource limits may not be visible on ARM
+                    # Read actual memory usage from /proc/meminfo instead
+                    if mem_used == "0B" or mem_total == "0B":
+                        try:
+                            # Read memory from /proc/meminfo (container's view)
+                            with open("/proc/meminfo", "r") as f:
+                                meminfo = f.read()
+
+                            # Parse MemTotal and MemAvailable
+                            mem_total_kb = 0
+                            mem_available_kb = 0
+                            for line in meminfo.split("\n"):
+                                if line.startswith("MemTotal:"):
+                                    mem_total_kb = int(line.split()[1])
+                                elif line.startswith("MemAvailable:"):
+                                    mem_available_kb = int(line.split()[1])
+
+                            # Calculate used memory
+                            mem_used_kb = mem_total_kb - mem_available_kb
+
+                            # Convert to human-readable format
+                            def format_bytes(kb):
+                                bytes_val = kb * 1024
+                                if bytes_val < 1024:
+                                    return f"{bytes_val}B"
+                                elif bytes_val < 1024 * 1024:
+                                    return f"{bytes_val / 1024:.1f}KB"
+                                elif bytes_val < 1024 * 1024 * 1024:
+                                    return f"{bytes_val / (1024 * 1024):.1f}MB"
+                                else:
+                                    return f"{bytes_val / (1024 * 1024 * 1024):.2f}GB"
+
+                            mem_used = format_bytes(mem_used_kb)
+                            mem_total = format_bytes(mem_total_kb)
+                            mem_percent_str = (
+                                str(round((mem_used_kb / mem_total_kb * 100), 2))
+                                if mem_total_kb > 0
+                                else "0"
+                            )
+                        except Exception:
+                            # If /proc read fails, keep docker stats values
+                            pass
+
+                    mem_percent = float(mem_percent_str)
 
                     # Network I/O (e.g., "12.5MB / 3.2MB")
                     net_io = stats.get("NetIO", "0B / 0B")
@@ -478,12 +535,12 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                         "cpu_percent": float(cpu_percent),
                         "memory_used": mem_used,
                         "memory_total": mem_total,
-                        "memory_percent": float(mem_percent),
+                        "memory_percent": mem_percent,
                         "network_rx": net_rx,
                         "network_tx": net_tx,
                         "disk_read": block_read,
                         "disk_write": block_write,
-                        "available": True
+                        "available": True,
                     }
                 else:
                     # Docker not available or container not running
@@ -492,7 +549,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                         "error": "Container not running or stats unavailable",
                         "returncode": result.returncode,
                         "stdout": result.stdout[:200] if result.stdout else "",
-                        "stderr": result.stderr[:200] if result.stderr else ""
+                        "stderr": result.stderr[:200] if result.stderr else "",
                     }
 
                 content = json.dumps(data).encode("utf-8")
@@ -574,7 +631,7 @@ class VisualizationHandler(BaseHTTPRequestHandler):
                     or csv_content
                     == "timestamp, status, response_time, success_count, total_count, failed_count"
                 ):
-                    self.send_error(404, f"No data found")
+                    self.send_error(404, "No data found")
                     return
 
                 content = csv_content.encode("utf-8")
