@@ -359,19 +359,6 @@ function loadSpeedTestData() {
   // Update date range display
   updateSpeedDateRange();
 
-  // Load latest for stats (always show latest)
-  fetch("/api/speed-tests/latest")
-    .then((response) => (response.ok ? response.json() : null))
-    .then((data) => {
-      if (data) {
-        updateSpeedTestStats(data);
-      }
-    })
-    .catch((error) => console.error("Error loading latest speed test:", error))
-    .finally(() => {
-      speedFetchInProgress = false; // Release debounce lock
-    });
-
   // Calculate time range based on offset (12-hour window)
   const now = new Date();
   const endTime = new Date(
@@ -393,19 +380,33 @@ function loadSpeedTestData() {
   const startTimeStr = formatTimestamp(startTime);
   const endTimeStr = formatTimestamp(endTime);
 
-  // Load recent tests for chart with time range
-  const url = `/api/speed-tests/recent?start_time=${encodeURIComponent(
+  // Load both latest stats and recent tests in parallel
+  const latestFetch = fetch("/api/speed-tests/latest")
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      if (data) {
+        updateSpeedTestStats(data);
+      }
+    })
+    .catch((error) => console.error("Error loading latest speed test:", error));
+
+  const recentUrl = `/api/speed-tests/recent?start_time=${encodeURIComponent(
     startTimeStr
   )}&end_time=${encodeURIComponent(endTimeStr)}`;
-  fetch(url)
+  const recentFetch = fetch(recentUrl)
     .then((response) => (response.ok ? response.json() : []))
     .then((tests) => {
       updateSpeedTestChart(tests);
-      updateSpeedNavButtons(tests);
+      updateSpeedNavButtons();
     })
     .catch((error) =>
       console.error("Error loading speed test history:", error)
     );
+
+  // Wait for both fetches to complete before releasing debounce lock
+  Promise.all([latestFetch, recentFetch]).finally(() => {
+    speedFetchInProgress = false;
+  });
 }
 
 // Update speed test stat cards
@@ -495,32 +496,38 @@ function startSpeedTestPolling() {
 }
 
 // Update speed test navigation button states
-function updateSpeedNavButtons(tests) {
+function updateSpeedNavButtons() {
   const prevBtn = document.getElementById("speedPrevBtn");
   const nextBtn = document.getElementById("speedNextBtn");
 
   if (!prevBtn || !nextBtn) return;
 
-  // Track earliest available data
-  if (tests.length > 0) {
-    const firstTest = tests[0];
-    earliestSpeedTestTime = new Date(firstTest.timestamp);
-  }
+  // Fetch earliest speed test to determine if we can go back further
+  fetch("/api/speed-tests/earliest")
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      if (data && data.timestamp) {
+        earliestSpeedTestTime = new Date(data.timestamp);
 
-  // Disable prev button if we're at or beyond the earliest data
-  const now = new Date();
-  const currentEndTime = new Date(
-    now.getTime() + speedTestHoursOffset * 60 * 60 * 1000
-  );
-  const nextStartTime = new Date(
-    currentEndTime.getTime() - 24 * 60 * 60 * 1000
-  ); // Would go back another 12 hours
+        // Disable prev button if the next window would end before earliest data
+        const now = new Date();
+        const currentEndTime = new Date(
+          now.getTime() + speedTestHoursOffset * 60 * 60 * 1000
+        );
+        // Next window ends where current window starts (12 hours earlier)
+        const nextWindowEndTime = new Date(
+          currentEndTime.getTime() - 12 * 60 * 60 * 1000
+        );
 
-  if (earliestSpeedTestTime && nextStartTime <= earliestSpeedTestTime) {
-    prevBtn.disabled = true;
-  } else {
-    prevBtn.disabled = false;
-  }
+        // Disable if next window ends before earliest available data
+        prevBtn.disabled =
+          earliestSpeedTestTime && nextWindowEndTime < earliestSpeedTestTime;
+      }
+    })
+    .catch((error) => {
+      console.error("Error fetching earliest speed test:", error);
+      prevBtn.disabled = false; // Allow navigation on error
+    });
 
   // Disable next button if showing live data (offset = 0)
   nextBtn.disabled = speedTestHoursOffset === 0;

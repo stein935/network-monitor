@@ -276,6 +276,46 @@ class VisualizationHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error fetching speed test data: {str(e)}")
 
+        elif self.path == "/api/speed-tests/earliest":
+            # Get earliest speed test result
+            try:
+                earliest = self.db.get_earliest_speed_test()
+
+                if earliest:
+                    (
+                        timestamp,
+                        download_mbps,
+                        upload_mbps,
+                        ping_ms,
+                        server_host,
+                        server_name,
+                        server_country,
+                    ) = earliest
+                    data = {
+                        "timestamp": timestamp,
+                        "download_mbps": round(download_mbps, 2),
+                        "upload_mbps": round(upload_mbps, 2),
+                        "ping_ms": round(ping_ms, 2) if ping_ms else None,
+                        "server_host": server_host,
+                        "server_name": server_name,
+                        "server_country": server_country,
+                    }
+                    content = json.dumps(data).encode("utf-8")
+
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    self.send_header("Content-Length", len(content))
+                    self.send_header(
+                        "Cache-Control", "no-cache, no-store, must-revalidate"
+                    )
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    self.send_error(404, "No speed test data available")
+            except Exception as e:
+                self.send_error(500, f"Error fetching earliest speed test data: {str(e)}")
+
         elif self.path.startswith("/api/speed-tests/recent"):
             # Get recent speed tests with optional time range
             try:

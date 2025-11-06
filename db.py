@@ -246,6 +246,17 @@ class NetworkMonitorDB:
         """)
         return cursor.fetchone()
 
+    def get_earliest_speed_test(self):
+        """Get the earliest speed test result."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT timestamp, download_mbps, upload_mbps, ping_ms, server_host, server_name, server_country
+            FROM speed_tests
+            ORDER BY id ASC
+            LIMIT 1
+        """)
+        return cursor.fetchone()
+
     def get_speed_tests_by_date(self, date_str):
         """Get all speed tests for a specific date."""
         start_time = f"{date_str} 00:00:00"
