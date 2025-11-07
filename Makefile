@@ -142,7 +142,7 @@ status:
 	@docker exec network-monitor python3 -c "from db import NetworkMonitorDB; db = NetworkMonitorDB('logs/network_monitor.db'); hours = db.get_available_hours(); print(f'  ✅ {len(hours)} hours of data available')" || echo "  ❌ Database error"
 	@echo ""
 	@echo "📊 Listening Ports:"
-	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -E "8080|8081|8090" || echo "  ❌ No ports listening"
+	@docker exec network-monitor ss -tlnp 2>/dev/null | grep -E "8080|8081|8090" || echo "  ❌ No ports listening"
 
 # Test endpoints
 test:
