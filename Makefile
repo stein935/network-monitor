@@ -1,4 +1,4 @@
-.PHONY: help dev build start stop restart logs shell test clean deploy rebuild-prod update-prod status
+.PHONY: help dev build start stop stop-prod restart logs shell test clean deploy rebuild-prod update-prod status
 
 # Default target
 help:
@@ -10,6 +10,7 @@ help:
 	@echo "  make start        - Start container and services"
 	@echo "  make restart      - Restart services in container"
 	@echo "  make stop         - Stop and remove container"
+	@echo "  make stop-prod    - Complete shutdown (systemd + container, no cleanup)"
 	@echo ""
 	@echo "Debugging:"
 	@echo "  make logs         - Follow container logs"
@@ -119,6 +120,22 @@ stop:
 	@echo "🛑 Stopping container..."
 	docker compose down
 	@echo "✅ Stopped!"
+
+# Complete production shutdown (systemd + container, no cleanup)
+stop-prod:
+	@echo "🛑 Complete shutdown initiated..."
+	@echo "🛑 Stopping systemd services..."
+	sudo systemctl stop network-monitor-server.service 2>/dev/null || true
+	sudo systemctl stop network-monitor-daemon.service 2>/dev/null || true
+	sudo systemctl stop network-monitor-container.service 2>/dev/null || true
+	@echo "🔒 Disabling systemd services..."
+	sudo systemctl disable network-monitor-server.service 2>/dev/null || true
+	sudo systemctl disable network-monitor-daemon.service 2>/dev/null || true
+	sudo systemctl disable network-monitor-container.service 2>/dev/null || true
+	@echo "🛑 Stopping Docker container..."
+	docker compose down || true
+	@echo "✅ Complete shutdown finished!"
+	@echo "📝 Image and logs preserved"
 
 # View logs
 logs:
