@@ -29,8 +29,10 @@ Network Monitor: Python daemon monitoring network connectivity + internet speed,
    - Handles macOS/Linux ping formats (regex for both)
    - WAL mode immediate commits, reduced logging (every 10th sample)
 
-2. **serve.py** - Dual server (HTTP:8090 + WebSocket:8081):
+2. **serve.py** - HTTP/WebSocket server orchestrator (HTTP:8090 + WebSocket:8081):
 
+   - Imports: `api_handlers`, `dashboard_generator`, `websocket_server`, `utils`
+   - Routes requests to appropriate handlers
    - Single-page dashboard: network chart (1hr window) + speed test chart (12hr window) + Docker resource monitoring
    - Time-based navigation (offset from current, not file-based)
    - Live view: WebSocket updates, fallback to HTTP polling
@@ -215,13 +217,27 @@ System packages (Docker): python3, iputils-ping, curl, procps, nginx, python3-we
 
 ```
 network-monitor/
-├── monitor.py, serve.py, db.py      # Core Python
-├── nginx.conf, start_services.sh    # Infrastructure
-├── Dockerfile, docker-compose.yml   # Docker
-├── VERSION                          # Semantic version
-├── static/{dashboard.css, dashboard.js}
-├── README.md, DEPLOYMENT.md, CHANGELOG.md, CLAUDE.md
-└── logs/network_monitor.db          # SQLite (network_logs + speed_tests)
+├── monitor.py                                    # Main daemon (network/speed monitoring)
+├── db.py                                         # SQLite database layer
+├── serve.py                                      # HTTP/WebSocket server orchestrator
+├── api_handlers.py                               # API endpoint handlers
+├── dashboard_generator.py                        # Dashboard HTML generation
+├── websocket_server.py                           # WebSocket server logic
+├── utils.py                                      # Utility functions
+├── nginx.conf, start_services.sh                 # Infrastructure
+├── Dockerfile, docker-compose.yml, Makefile      # Docker & build tools
+├── VERSION                                       # Semantic version
+├── static/                                       # Frontend assets
+│   ├── dashboard.css
+│   ├── dashboard.js
+│   └── fonts/
+├── systemd/                                      # Systemd service files
+│   ├── network-monitor-container.service
+│   ├── network-monitor-daemon.service
+│   └── network-monitor-server.service
+├── logs/                                         # SQLite database
+│   └── network_monitor.db
+└── README.md, DEPLOYMENT.md, CHANGELOG.md, CLAUDE.md
 ```
 
 ## Troubleshooting Quick Ref

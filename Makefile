@@ -31,6 +31,10 @@ dev:
 	@docker cp serve.py network-monitor:/app/serve.py
 	@docker cp db.py network-monitor:/app/db.py
 	@docker cp monitor.py network-monitor:/app/monitor.py
+	@docker cp utils.py network-monitor:/app/utils.py
+	@docker cp dashboard_generator.py network-monitor:/app/dashboard_generator.py
+	@docker cp websocket_server.py network-monitor:/app/websocket_server.py
+	@docker cp api_handlers.py network-monitor:/app/api_handlers.py
 	@docker cp start_services.sh network-monitor:/app/start_services.sh
 	@docker cp nginx.conf network-monitor:/etc/nginx/nginx.conf
 	@docker cp VERSION network-monitor:/app/VERSION

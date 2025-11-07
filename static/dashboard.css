@@ -48,7 +48,7 @@ body {
 /* Terminal-style header */
 .header {
     background: var(--bg-soft);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     border-radius: 6px;
     padding: 16px 20px;
     margin-bottom: 20px;
@@ -133,7 +133,7 @@ body {
     align-items: center;
     justify-content: center;
     background: var(--bg-soft);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     color: var(--fg);
     padding: 8px 16px;
     border-radius: 4px;
@@ -179,7 +179,7 @@ body {
 .websocket-status {
     background: var(--green);
     color: var(--bg);
-    padding: 6px 12px;
+    padding: 6px 14px 6px 12px;
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
@@ -219,7 +219,7 @@ body {
 /* Chart container */
 .chart-container {
     background: var(--bg-hard);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     border-radius: 6px;
     padding: 24px;
     margin-bottom: 20px;
@@ -256,7 +256,7 @@ body {
     font-weight: 500;
     padding: 8px 12px;
     background: var(--bg-soft);
-    border: 2px solid var(--gray-light);
+    border: 1px solid var(--gray-light);
     border-radius: 4px;
     white-space: nowrap;
 }
@@ -264,7 +264,7 @@ body {
 /* Speed Test Section */
 .speed-test-container {
     background: var(--bg-hard);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     border-radius: 6px;
     padding: 24px;
     margin-bottom: 20px;
@@ -280,7 +280,7 @@ body {
 
 .speed-stat {
     background: var(--bg-soft);
-    border: 2px solid var(--gray-light);
+    border: 1px solid var(--gray-light);
     border-radius: 4px;
     padding: 16px;
     text-align: center;
@@ -332,7 +332,7 @@ body {
 
 .speed-nav-button {
     background: var(--bg-soft);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     color: var(--fg);
     padding: 8px 16px;
     border-radius: 4px;
@@ -370,7 +370,7 @@ body {
 
 .network-nav-button {
     background: var(--bg-soft);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     color: var(--fg);
     padding: 8px 16px;
     border-radius: 4px;
@@ -403,7 +403,7 @@ body {
 
 .nav-button {
     background: var(--bg-soft);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     color: var(--fg);
     padding: 12px 24px;
     border-radius: 4px;
@@ -460,129 +460,122 @@ body {
 /* Docker Resources Section */
 .docker-resources-container {
     background: var(--bg-hard);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     border-radius: 6px;
     padding: 24px;
     margin-bottom: 20px;
     box-shadow: 0 2px 8px rgba(60, 56, 54, 0.1);
 }
 
-.resource-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-}
-
-.resource-card {
-    background: var(--bg-soft);
-    border: 2px solid var(--gray-light);
-    border-radius: 4px;
-    padding: 16px;
+.resources-grid {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
-.resource-card-label {
-    color: var(--gray);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 600;
-}
-
-.resource-bar-container {
-    background: var(--bg);
-    border: 2px solid var(--gray-light);
+.resource-box {
+    background: var(--bg-soft);
+    border: 1px solid var(--gray-light);
+    padding: 12px;
     border-radius: 4px;
-    height: 24px;
-    position: relative;
+    flex: 1;
+    min-width: 200px;
+}
+
+.resource-box.large {
+    flex: 1.5;
+}
+
+.resource-label {
+    color: var(--fg);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.bar-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.bar {
+    flex: 1;
+    font-size: 14px;
+    letter-spacing: 0px;
+    white-space: nowrap;
     overflow: hidden;
 }
 
-.resource-bar {
-    height: 100%;
-    background: var(--blue);
-    transition: width 0.3s ease, background-color 0.3s ease;
-    border-radius: 2px;
-    position: relative;
-}
-
-.resource-bar::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0) 0%,
-        rgba(255, 255, 255, 0.1) 50%,
-        rgba(255, 255, 255, 0) 100%
-    );
-}
-
-.resource-bar-memory {
-    background: var(--purple);
-}
-
-/* Color thresholds for CPU and Memory bars */
-.resource-bar.warning {
-    background: var(--yellow);
-}
-
-.resource-bar.danger {
-    background: var(--red);
-}
-
-.resource-bar-memory.warning {
-    background: var(--yellow);
-}
-
-.resource-bar-memory.danger {
-    background: var(--red);
-}
-
-.resource-card-value {
+.percentage {
     color: var(--fg);
-    font-size: 14px;
-    font-weight: 600;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    min-width: 45px;
+    text-align: right;
 }
 
-.resource-io-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+.percentage.warning {
+    color: var(--orange);
 }
 
-.io-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+.percentage.critical {
+    color: var(--red);
 }
 
-.io-label {
+.value {
     color: var(--gray);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: normal;
+    margin-top: 4px;
 }
 
-.io-value {
-    color: var(--fg);
-    font-size: 16px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
+.metrics-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
 }
+
+.metric {
+    flex: 1;
+}
+
+.metric-label {
+    color: var(--gray);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.metric-value {
+    color: var(--fg);
+    font-size: 13px;
+    margin-top: 2px;
+}
+
+.arrow {
+    color: var(--aqua);
+    font-size: 11px;
+}
+
+.arrow.up {
+    color: var(--aqua);
+}
+
+.arrow.down {
+    color: var(--aqua);
+}
+
+/* Block character colors */
+.block-full { color: var(--purple); }
+.block-high { color: var(--purple); opacity: 0.8; }
+.block-med { color: var(--gray-light); }
+.block-low { color: var(--gray-light); opacity: 0.5; }
 
 /* Footer */
 .footer {
     background: var(--bg-soft);
-    border: 2px solid var(--gray);
+    border: 1px solid var(--gray);
     border-radius: 6px;
     padding: 12px 20px;
     margin-top: 20px;
@@ -651,8 +644,8 @@ body {
         justify-content: center;
     }
 
-    .resource-grid {
-        grid-template-columns: 1fr;
+    .resources-grid {
+        flex-direction: column;
     }
 
     .footer-content {

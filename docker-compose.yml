@@ -15,10 +15,15 @@ services:
     cap_add:
       - NET_RAW
       - NET_ADMIN
-    # Resource limits (Docker Compose standalone syntax)
-    mem_limit: 192m # Maximum 192MB RAM (leaving ~320MB for Pi-hole + system)
-    mem_reservation: 96m # Soft limit / preferred usage
-    cpus: 0.4 # Maximum 40% of one CPU core (leaving 60% for Pi-hole + system)
+    # Resource limits (Docker Compose v2/v3 syntax - works on Linux & Mac)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'      # Maximum 40% of one CPU core
+          memory: 192M     # Hard limit: 192MB RAM
+        reservations:
+          cpus: '0.2'      # Guarantee 20% CPU
+          memory: 96M      # Soft limit: 96MB RAM
     # Logging limits to prevent unbounded disk usage
     logging:
       driver: "json-file"

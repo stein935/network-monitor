@@ -940,13 +940,13 @@ function updateWebSocketStatus(status) {
   statusEl.classList.remove("disconnected", "connecting");
 
   if (status === "connected") {
-    statusEl.textContent = "WebSocket: Connected";
+    statusEl.textContent = "󰴽";
     statusEl.style.background = "#98971a"; // green
   } else if (status === "connecting") {
-    statusEl.textContent = "WebSocket: Connecting...";
+    statusEl.textContent = "󰴽 Connecting...";
     statusEl.classList.add("connecting");
   } else {
-    statusEl.textContent = "WebSocket: Disconnected (Polling)";
+    statusEl.textContent = "󰴽 Disconnected (Polling)";
     statusEl.classList.add("disconnected");
   }
 }
@@ -1027,6 +1027,29 @@ document.addEventListener("DOMContentLoaded", function () {
 // Docker Stats Management
 let dockerStatsInterval = null;
 
+function generateBar(percentage, width = 25) {
+  const filled = Math.round((percentage / 100) * width);
+  let bar = "[";
+
+  for (let i = 0; i < width; i++) {
+    if (i < filled) {
+      // Gradient from full to medium
+      if (i < filled - 2) {
+        bar += '<span class="block-full">█</span>';
+      } else if (i < filled - 1) {
+        bar += '<span class="block-high">▓</span>';
+      } else {
+        bar += '<span class="block-med">▒</span>';
+      }
+    } else {
+      bar += '<span class="block-low">░</span>';
+    }
+  }
+
+  bar += "]";
+  return bar;
+}
+
 function updateDockerStats() {
   fetch("/api/docker-stats")
     .then((response) => (response.ok ? response.json() : null))
@@ -1034,35 +1057,37 @@ function updateDockerStats() {
       if (data && data.available) {
         // Update CPU
         const cpuBar = document.getElementById("dockerCpuBar");
-        const cpuValue = document.getElementById("dockerCpuValue");
-        if (cpuBar && cpuValue) {
-          const cpuPercent = data.cpu_percent || 0;
-          cpuBar.style.width = `${cpuPercent}%`;
-          cpuValue.textContent = `${cpuPercent.toFixed(1)}%`;
+        const cpuPercent = document.getElementById("dockerCpuPercent");
+        if (cpuBar && cpuPercent) {
+          const cpuValue = data.cpu_percent || 0;
+          cpuBar.innerHTML = generateBar(cpuValue, 25);
+          cpuPercent.textContent = `${cpuValue.toFixed(1)}%`;
 
           // Apply color thresholds
-          cpuBar.classList.remove("warning", "danger");
-          if (cpuPercent >= 85) {
-            cpuBar.classList.add("danger");
-          } else if (cpuPercent >= 70) {
-            cpuBar.classList.add("warning");
+          cpuPercent.classList.remove("warning", "critical");
+          if (cpuValue >= 80) {
+            cpuPercent.classList.add("critical");
+          } else if (cpuValue >= 60) {
+            cpuPercent.classList.add("warning");
           }
         }
 
         // Update Memory
         const memBar = document.getElementById("dockerMemBar");
+        const memPercent = document.getElementById("dockerMemPercent");
         const memValue = document.getElementById("dockerMemValue");
-        if (memBar && memValue) {
-          const memPercent = data.memory_percent || 0;
-          memBar.style.width = `${memPercent}%`;
+        if (memBar && memPercent && memValue) {
+          const memPercentValue = data.memory_percent || 0;
+          memBar.innerHTML = generateBar(memPercentValue, 25);
+          memPercent.textContent = `${memPercentValue.toFixed(1)}%`;
           memValue.textContent = `${data.memory_used} / ${data.memory_total}`;
 
           // Apply color thresholds
-          memBar.classList.remove("warning", "danger");
-          if (memPercent >= 85) {
-            memBar.classList.add("danger");
-          } else if (memPercent >= 70) {
-            memBar.classList.add("warning");
+          memPercent.classList.remove("warning", "critical");
+          if (memPercentValue >= 80) {
+            memPercent.classList.add("critical");
+          } else if (memPercentValue >= 60) {
+            memPercent.classList.add("warning");
           }
         }
 
@@ -1083,14 +1108,20 @@ function updateDockerStats() {
         }
       } else {
         // Docker stats not available - show placeholder
-        const cpuValue = document.getElementById("dockerCpuValue");
+        const cpuBar = document.getElementById("dockerCpuBar");
+        const cpuPercent = document.getElementById("dockerCpuPercent");
+        const memBar = document.getElementById("dockerMemBar");
+        const memPercent = document.getElementById("dockerMemPercent");
         const memValue = document.getElementById("dockerMemValue");
         const netRx = document.getElementById("dockerNetRx");
         const netTx = document.getElementById("dockerNetTx");
         const diskRead = document.getElementById("dockerDiskRead");
         const diskWrite = document.getElementById("dockerDiskWrite");
 
-        if (cpuValue) cpuValue.textContent = "Unavailable";
+        if (cpuBar) cpuBar.innerHTML = generateBar(0, 25);
+        if (cpuPercent) cpuPercent.textContent = "N/A";
+        if (memBar) memBar.innerHTML = generateBar(0, 25);
+        if (memPercent) memPercent.textContent = "N/A";
         if (memValue) memValue.textContent = "Unavailable";
         if (netRx) netRx.textContent = "--";
         if (netTx) netTx.textContent = "--";
@@ -1106,8 +1137,8 @@ function updateDockerStats() {
 // Initialize Docker stats on load
 document.addEventListener("DOMContentLoaded", function () {
   updateDockerStats();
-  // Update Docker stats every 30 seconds
-  dockerStatsInterval = setInterval(updateDockerStats, 30000);
+  // Update Docker stats every 5 seconds
+  dockerStatsInterval = setInterval(updateDockerStats, 5000);
 });
 
 // Old navigation functions removed - now using time-based navigation
