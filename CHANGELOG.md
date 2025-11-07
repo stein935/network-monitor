@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- [refactor] Modular architecture: Split serve.py (1000+ lines) into focused modules
+  - `api_handlers.py` - API endpoint handlers (network logs, speed tests, stats, Docker stats, CSV export)
+  - `dashboard_generator.py` - HTML dashboard generation
+  - `websocket_server.py` - WebSocket connection and broadcast logic
+  - `utils.py` - Shared utilities (version management, byte formatting, browser opener)
+- [dev] Updated Makefile `dev` command to copy all new Python modules to container
+
 - [feat] Docker resource monitoring section with real-time stats (CPU, memory, network I/O, disk I/O)
 - [feat] `/api/docker-stats` endpoint to fetch container resource metrics
 - [feat] `/proc/meminfo` fallback for memory monitoring on ARM platforms (Raspberry Pi)
@@ -38,11 +45,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- [refactor] Docker Compose syntax: Migrated from standalone to v2/v3 deploy.resources format (cross-platform compatibility)
+- [refactor] serve.py reduced from ~1000 lines to ~170 lines (orchestrator only)
 - [ui] Success Rate chart y-axis now shows full range (0-105%) instead of truncated (80-105%)
 - [ui] Success Rate converted to area chart with filled background for better visibility
 - [ui] Removed point markers from Success Rate line for cleaner visualization
 - [ui] Reduced chart point size from 4px to 2px for less clutter
-- [ui] Replaced Unicode emojis with Nerd Font icons for section titles ( and )
+- [ui] Replaced Unicode emojis with Nerd Font icons for section titles (󰖟 network, 󰓅 speed test, 󰴽 WebSocket)
+- [ui] Docker resource monitoring bars now use ASCII block characters (█▓▒░) instead of progress bars
+- [ui] Border thickness reduced from 2px to 1px across all containers for cleaner look
+- [ui] WebSocket status shows icon-only when connected (󰴽) for minimal footer
 - [dev] `make dev` now performs hard refresh (Cmd+Shift+R) to bypass browser cache
 - [dev] Removed unnecessary 30-second wait in Makefile start command
 - [style] Improved navigation controls layout with date range display and button grouping

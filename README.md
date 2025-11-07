@@ -39,13 +39,28 @@ docker compose up -d
 
 ## Architecture
 
+**Modular Design:**
+
+The server code follows a separation of concerns pattern:
+- `serve.py` - Orchestrates HTTP and WebSocket servers, delegates to specialized modules
+- `api_handlers.py` - Handles all API endpoints (network logs, speed tests, stats, Docker stats, CSV export)
+- `dashboard_generator.py` - Generates HTML dashboard pages
+- `websocket_server.py` - Manages WebSocket connections and broadcasts real-time updates
+- `utils.py` - Provides shared utilities (version management, byte formatting, browser opener)
+
+This modular architecture reduces complexity, improves maintainability, and makes testing easier.
+
 **Data flow:**
 
 ```
 Browser → nginx:8080 (gzip, reverse proxy)
               ↓
-         serve.py:8090 (HTTP - Chart.js, API, CSV export)
-         serve.py:8081 (WebSocket - 30s updates via /ws)
+         serve.py:8090 (HTTP orchestrator)
+           ├─→ api_handlers.py (API endpoints)
+           ├─→ dashboard_generator.py (HTML generation)
+           └─→ utils.py (helpers)
+         serve.py:8081 (WebSocket server)
+           └─→ websocket_server.py (real-time updates)
               ↓
          SQLite database (logs/network_monitor.db)
               ↑
@@ -147,6 +162,21 @@ ports:
 - Python HTTP server on port 8090 (internal, proxied by nginx)
 - WebSocket server on port 8081 (proxied via `/ws` path)
 
+### Docker Resource Limits
+
+The `docker-compose.yml` uses Docker Compose v2/v3 syntax for resource limits (cross-platform compatible):
+
+```yaml
+deploy:
+  resources:
+    limits:
+      cpus: '0.4'      # Maximum 40% of one CPU core
+      memory: 192M     # Hard limit: 192MB RAM
+    reservations:
+      cpus: '0.2'      # Guarantee 20% CPU
+      memory: 96M      # Soft limit: 96MB RAM
+```
+
 ## Data Format
 
 ### SQLite Schema
@@ -197,19 +227,30 @@ timestamp, status, response_time, success_count, total_count, failed_count
 
 ```
 network-monitor/
-├── monitor.py              # Python monitor daemon (ping + speed tests)
-├── serve.py                # Web server (HTTP + WebSocket)
-├── db.py                   # SQLite database handler (dual tables)
-├── nginx.conf              # Reverse proxy config
-├── start_services.sh       # Service startup script
-├── Dockerfile              # Docker image
-├── docker-compose.yml      # Container config
+├── monitor.py                   # Python monitor daemon (ping + speed tests)
+├── serve.py                     # HTTP/WebSocket server orchestrator
+├── api_handlers.py              # API endpoint handlers
+├── dashboard_generator.py       # Dashboard HTML generation
+├── websocket_server.py          # WebSocket server logic
+├── utils.py                     # Utility functions (version, formatting, browser)
+├── db.py                        # SQLite database handler (dual tables)
+├── nginx.conf                   # Reverse proxy config
+├── start_services.sh            # Service startup script
+├── Dockerfile                   # Docker image
+├── docker-compose.yml           # Container config (v2/v3 syntax)
+├── Makefile                     # Development commands
 ├── static/
-│   ├── dashboard.css       # Dashboard styling (Gruvbox theme)
-│   └── dashboard.js        # Dashboard logic (Chart.js, WebSocket)
-├── DEPLOYMENT.md           # Full deployment guide
+│   ├── dashboard.css            # Dashboard styling (Gruvbox theme)
+│   ├── dashboard.js             # Dashboard logic (Chart.js, WebSocket)
+│   └── fonts/                   # FiraMono Nerd Font
+├── systemd/                     # Systemd service files
+│   ├── network-monitor-container.service
+│   ├── network-monitor-daemon.service
+│   └── network-monitor-server.service
+├── DEPLOYMENT.md                # Full deployment guide
+├── VERSION                      # Semantic versioning
 └── logs/
-    └── network_monitor.db  # SQLite database (network_logs + speed_tests)
+    └── network_monitor.db       # SQLite database (network_logs + speed_tests)
 ```
 
 ## Management
