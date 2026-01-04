@@ -19,9 +19,9 @@ help:
 	@echo "  make test         - Test HTTP endpoints"
 	@echo ""
 	@echo "Deployment:"
-	@echo "  make deploy       - Deploy to Raspberry Pi (via GitHub)"
-	@echo "  make rebuild-prod - Full rebuild (use on Pi after git pull)"
-	@echo "  make update-prod  - Quick update (on Pi, no rebuild)"
+	@echo "  make deploy       - Deploy to remote server (via rsync, set DEPLOY_HOST)"
+	@echo "  make rebuild-prod - Full rebuild (use on server after deploy)"
+	@echo "  make update-prod  - Quick update (on server, no rebuild)"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make clean        - Remove container, image, and logs"
@@ -57,10 +57,10 @@ dev:
 	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -q 8090 && echo "  ✅ Port 8090 listening" || echo "  ⚠️  Port 8090 not listening"
 	@docker exec network-monitor netstat -tlnp 2>/dev/null | grep -q 8081 && echo "  ✅ Port 8081 listening" || echo "  ⚠️  Port 8081 not listening"
 	@echo "✅ Dev environment updated!"
-	@echo "🌐 Refreshing http://localhost:8080..."
+	@echo "🌐 Refreshing http://localhost..."
 	@osascript -e 'tell application "Google Chrome"' \
 		-e '  set found to false' \
-		-e '  set targetURL to "localhost:8080"' \
+		-e '  set targetURL to "localhost"' \
 		-e '  repeat with w in windows' \
 		-e '    set tabIndex to 1' \
 		-e '    repeat with t in tabs of w' \
@@ -80,21 +80,21 @@ dev:
 		-e '  end repeat' \
 		-e '  if not found then' \
 		-e '    activate' \
-		-e '    make new tab at end of tabs of front window with properties {URL:"http://localhost:8080"}' \
+		-e '    make new tab at end of tabs of front window with properties {URL:"http://localhost"}' \
 		-e '  end if' \
-		-e 'end tell' 2>/dev/null || open -a "Google Chrome" http://localhost:8080
+		-e 'end tell' 2>/dev/null || open -a "Google Chrome" http://localhost
 
 # Build from scratch
 build:
 	@echo "🏗️  Building Docker image..."
-	docker compose down || true
-	docker compose build --no-cache
+	docker-compose down || true
+	docker-compose build --no-cache
 	@echo "✅ Build complete!"
 
 # Start everything fresh
 start:
 	@echo "🚀 Starting container..."
-	docker compose up -d
+	docker-compose up -d
 	@sleep 3
 	@echo "📊 Starting monitor (generates data)..."
 	docker exec -d network-monitor python3 /app/monitor.py 5 12
@@ -102,7 +102,7 @@ start:
 	docker exec -d network-monitor /bin/bash /app/start_services.sh
 	@sleep 2
 	@echo "✅ All services started!"
-	@echo "🌐 Open http://localhost:8080"
+	@echo "🌐 Open http://localhost"
 
 # Restart services only (no rebuild)
 restart:
@@ -118,7 +118,7 @@ restart:
 # Stop everything
 stop:
 	@echo "🛑 Stopping container..."
-	docker compose down
+	docker-compose down
 	@echo "✅ Stopped!"
 
 # Complete production shutdown (systemd + container, no cleanup)
@@ -133,7 +133,7 @@ stop-prod:
 	sudo systemctl disable network-monitor-daemon.service 2>/dev/null || true
 	sudo systemctl disable network-monitor-container.service 2>/dev/null || true
 	@echo "🛑 Stopping Docker container..."
-	docker compose down || true
+	docker-compose down || true
 	@echo "✅ Complete shutdown finished!"
 	@echo "📝 Image and logs preserved"
 
@@ -164,7 +164,7 @@ status:
 # Test endpoints
 test:
 	@echo "🧪 Testing HTTP endpoint..."
-	@curl -s http://localhost:8080 | head -5 || echo "❌ Failed"
+	@curl -s http://localhost | head -5 || echo "❌ Failed"
 	@echo ""
 	@echo "🧪 Testing WebSocket port..."
 	@nc -zv localhost 8081 2>&1 | head -1
@@ -172,34 +172,41 @@ test:
 # Clean everything
 clean:
 	@echo "🧹 Cleaning up..."
-	docker compose down || true
+	docker-compose down || true
 	docker rm -f network-monitor 2>/dev/null || true
 	docker rmi network-monitor:latest 2>/dev/null || true
 	@echo "⚠️  Delete logs? (y/N): " && read ans && [ $${ans:-N} = y ] && rm -rf logs/* || true
 	@echo "✅ Cleanup complete!"
 
-# Deploy to Raspberry Pi (automated if PI_HOST is set)
+# Deploy to remote server via rsync (set DEPLOY_HOST environment variable)
 deploy:
-	@echo "🚀 Deploying to Raspberry Pi..."
-	@echo "📤 Pushing to GitHub..."
-	git push origin main
-ifdef PI_HOST
-	@echo "📥 Deploying to $(PI_HOST)..."
-	ssh -t $(PI_HOST) 'cd ~/network-monitor && git pull origin main && make rebuild-prod'
-	@echo "✅ Deployment complete!"
-	@echo "🌐 Visit http://$(PI_HOST):8080"
-else
+ifndef DEPLOY_HOST
+	@echo "❌ Error: DEPLOY_HOST not set"
 	@echo ""
-	@echo "📥 Manual deployment steps:"
-	@echo "  1. SSH to your Raspberry Pi"
-	@echo "  2. cd ~/network-monitor"
-	@echo "  3. git pull origin main"
-	@echo "  4. make rebuild-prod"
-	@echo ""
-	@echo "Or set PI_HOST environment variable for automated deployment:"
-	@echo "  export PI_HOST=pi@192.168.1.100"
+	@echo "Set DEPLOY_HOST environment variable first:"
+	@echo "  export DEPLOY_HOST=ubuntu@192.168.10.151"
 	@echo "  make deploy"
+	@exit 1
 endif
+	@echo "🚀 Deploying to $(DEPLOY_HOST)..."
+	@echo "📤 Transferring files via rsync..."
+	@rsync -avz --delete \
+		--include='*.py' \
+		--include='Dockerfile' \
+		--include='docker-compose.yml' \
+		--include='.dockerignore' \
+		--include='nginx.conf' \
+		--include='start_services.sh' \
+		--include='VERSION' \
+		--include='Makefile' \
+		--include='static/' --include='static/***' \
+		--include='systemd/' --include='systemd/***' \
+		--exclude='*' \
+		./ $(DEPLOY_HOST):/opt/network-monitor/
+	@echo "📥 Building and starting services on $(DEPLOY_HOST)..."
+	@ssh -t $(DEPLOY_HOST) 'cd /opt/network-monitor && sudo make install-services && make rebuild-prod'
+	@echo "✅ Deployment complete!"
+	@echo "🌐 Visit http://$(DEPLOY_HOST)"
 
 # Install systemd services (requires sudo, run once)
 install-services:
@@ -219,8 +226,8 @@ rebuild-prod: install-services
 	sudo systemctl stop network-monitor-daemon.service || true
 	sudo systemctl stop network-monitor-container.service || true
 	@echo "🐳 Rebuilding Docker container..."
-	docker compose down || true
-	docker compose build --no-cache
+	docker-compose down || true
+	docker-compose build --no-cache
 	@echo "🚀 Starting services via systemd..."
 	sudo systemctl start network-monitor-container.service
 	@sleep 5

@@ -17,7 +17,7 @@ A Python-based daemon for monitoring network connectivity, response times, and i
 - **Auto cleanup** - Keeps 30 days of logs
 - **CSV export on-demand** - Export historical data when needed
 - **Gruvbox theme** - Easy on the eyes for long monitoring
-- **Docker deployment** - Optimized for Raspberry Pi Zero 2 W
+- **Docker deployment** - Run on any Linux server (Raspberry Pi, Ubuntu, etc.)
 
 ## Quick Start (Docker)
 
@@ -34,7 +34,7 @@ docker compose up -d
 
 # 3. Setup systemd services (see DEPLOYMENT.md)
 
-# 4. Access at http://<raspberry-pi-ip>:8080
+# 4. Access at http://<server-ip>
 ```
 
 ## Architecture
@@ -53,7 +53,7 @@ This modular architecture reduces complexity, improves maintainability, and make
 **Data flow:**
 
 ```
-Browser → nginx:8080 (gzip, reverse proxy)
+Browser → nginx:80 (gzip, reverse proxy)
               ↓
          serve.py:8090 (HTTP orchestrator)
            ├─→ api_handlers.py (API endpoints)
@@ -152,13 +152,13 @@ Edit `docker-compose.yml`:
 
 ```yaml
 ports:
-  - "8080:8080" # External:Internal (nginx HTTP)
+  - "80:8080" # External:Internal (nginx HTTP)
   - "8081:8081" # External:Internal (WebSocket)
 ```
 
 **Internal port architecture:**
 
-- nginx listens on port 8080 (proxies requests)
+- nginx listens on internal port 8080, exposed externally as port 80 (proxies requests)
 - Python HTTP server on port 8090 (internal, proxied by nginx)
 - WebSocket server on port 8081 (proxied via `/ws` path)
 
@@ -255,7 +255,7 @@ network-monitor/
 
 ## Management
 
-### Systemd Services (Raspberry Pi)
+### Systemd Services (Linux Server)
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for full setup instructions.
 
@@ -374,5 +374,5 @@ The dashboard uses these API endpoints for data retrieval:
 
 ## Documentation
 
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Complete Raspberry Pi deployment guide
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Complete deployment guide for remote servers
 - [CLAUDE.md](CLAUDE.md) - Developer documentation

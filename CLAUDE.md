@@ -12,7 +12,7 @@ Network Monitor: Python daemon monitoring network connectivity + internet speed,
 - Chart.js visualization (93% smaller than Plotly)
 - WebSocket (30s batches) + HTTP polling fallback
 - nginx reverse proxy (gzip, caching)
-- Docker deployment (Raspberry Pi Zero 2 W optimized)
+- Docker deployment (Linux servers: Ubuntu, Raspberry Pi, etc.)
 - Dual monitoring: Network latency (ping 8.8.8.8) + bandwidth (speedtest-cli every 15 min)
 
 **Performance:** 30-35% resource reduction via WAL mode, nginx caching, disabled animations, request debouncing, ETag support, reduced logging.
@@ -49,7 +49,7 @@ Network Monitor: Python daemon monitoring network connectivity + internet speed,
 
 4. **nginx.conf** - Reverse proxy:
 
-   - External :8080 → serve.py:8090 (HTTP), :8081 (WebSocket via /ws)
+   - External :80 → serve.py:8090 (HTTP), :8081 (WebSocket via /ws)
    - Gzip compression, proxy cache (30s for /api, /csv)
    - Reduced workers (128 conn), access logs disabled
 
@@ -58,7 +58,7 @@ Network Monitor: Python daemon monitoring network connectivity + internet speed,
 ### Data Flow
 
 ```
-Browser → nginx:8080 → serve.py:8090 (HTTP) + :8081 (WebSocket /ws) → SQLite ← monitor.py
+Browser → nginx:80 → serve.py:8090 (HTTP) + :8081 (WebSocket /ws) → SQLite ← monitor.py
 ```
 
 Live: WebSocket 30s batches, fallback HTTP polling (60s network, 5min speed)
@@ -66,15 +66,30 @@ Historical: Time-range SQL queries
 
 ### Port Architecture
 
-- External: 8080 (nginx HTTP), 8081 (WebSocket)
+- External: 80 (nginx HTTP), 8081 (WebSocket)
 - Internal: 8080 (nginx), 8090 (serve.py HTTP), 8081 (serve.py WebSocket)
 
 ## Development Commands
 
-### Docker
+### Deployment (rsync-based)
 
 ```bash
-# Build/start
+# Set deployment target (one-time setup)
+export DEPLOY_HOST=ubuntu@192.168.10.151
+
+# Deploy to remote server
+make deploy
+# This: transfers files via rsync → builds container → starts services
+
+# Access: http://<server-ip>
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete setup instructions.
+
+### Docker (Local Development)
+
+```bash
+# Build/start locally
 docker compose build && docker compose up -d
 
 # Start services
@@ -90,15 +105,9 @@ docker exec network-monitor pgrep -f monitor.py
 docker exec network-monitor pkill -f monitor.py
 docker exec network-monitor nginx -s quit
 docker exec network-monitor pkill -f serve.py
-
-# Update
-git pull origin main
-docker compose down && docker compose build --no-cache && docker compose up -d
-
-# Access: http://<pi-ip>:8080
 ```
 
-### Systemd (Raspberry Pi)
+### Systemd (Remote Server)
 
 ```bash
 # Status
@@ -126,7 +135,7 @@ sudo journalctl -u network-monitor-daemon.service -f
 Before ANY `git push`, you MUST:
 
 1. **Update README.md** - Overview, installation, examples, dependencies
-2. **Update DEPLOYMENT.md** - Deployment process, systemd, Docker, Pi considerations
+2. **Update DEPLOYMENT.md** - Deployment process, systemd, Docker, remote server setup
 3. **Update CLAUDE.md** - New conventions, commands, structure, API endpoints
 4. **Inline docs** - Function docstrings, updated comments
 5. **Verify** - State: "✓ Documentation updated and verified. Ready to push."
@@ -242,7 +251,7 @@ network-monitor/
 
 ## Troubleshooting Quick Ref
 
-- **Port conflicts:** `lsof -ti:8080` then kill processes
+- **Port conflicts:** `lsof -ti:80` then kill processes
 - **Speed tests not running:** Check `docker exec network-monitor pgrep -f monitor.py`, view logs with `docker logs network-monitor | grep -i speed`
 - **Memory constraints:** Reduce frequency, increase sample size: `./monitor.sh 5 60`
 - **Docker build:** Use system packages not pip (faster on Pi Zero 2 W)
